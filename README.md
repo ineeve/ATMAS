@@ -47,3 +47,27 @@ Premissas:
 - Entre aterragens e descolagens tem de haver pelo menos 3 minutos de intervalo
 - Não há filas a entrar e sair da pista: taxiways têm capacidade ilimitada
 - Só há 1 estado de emergência, não podem tomar prioridades entre eles
+
+# AgenteAviao {
+- combustível_max;
+- velocidade_max;
+- velocidade_min: 0.7 da max;
+- velocidade;
+- combustível_atual;
+- taxa-combustivel(combustivel/s);
+- posiçao;
+- estado: {voo, aterrar, parado, acidente};
+- emergência: bool;
+- lista-de-aeroportos[];
+- aeroporto_destino;
+- aeroporto_partida;
+- hora_prevista_de_chegada:
+- hora_máxima_de_aterragem;
+- hora_mínima_de_aterragem;
+}
+
+# AgenteAeroporto {
+- posição:
+- numero-pistas: //maybe
+- lista-com-todos-os-avioes-conectados.
+}
