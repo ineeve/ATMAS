@@ -1,11 +1,11 @@
 package utils;
 
 public class Coordinates {
-	private Integer x, y;
+	private long x, y;
 	
-	Coordinates(Integer x, Integer y){
-		this.x = x;
-		this.y = y;
+	public Coordinates(long l, long m){
+		this.x = l;
+		this.y = m;
 	}
 	
 	public static double distance(Coordinates c1, Coordinates c2) {
