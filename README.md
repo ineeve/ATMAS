@@ -17,10 +17,10 @@ Ciclo normal de um avião:
 - Informa aeroporto que se irá desconetar naquele momento
 - Desconeta do aeroporto
 2. Viagem
-2.1 Conetar ao aeroporto de destino
-2.2 Recebe todos os aviões deste
-2.3 Comunicar com todos para saber quando pode aterrar
-2.4 Se não houver horário livre, pede aos outros que mudem eles as suas horas, começando pelo que tem a hora mais próxima deste (pesquisa em largura)
+- 2.1 Conetar ao aeroporto de destino
+- 2.2 Recebe todos os aviões deste
+- 2.3 Comunicar com todos para saber quando pode aterrar
+- 2.4 Se não houver horário livre, pede aos outros que mudem eles as suas horas, começando pelo que tem a hora mais próxima deste (pesquisa em largura)
 - Ajustamento da velocidade baseada em quando pode aterrar
 - Escolhe a hora de chegada
 3. Aterragem
