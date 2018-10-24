@@ -1,5 +1,6 @@
 import java.util.ArrayList;
 
+import jade.core.AID;
 import jade.core.Agent;
 import utils.Coordinates;
 
@@ -14,5 +15,13 @@ public class AirportAgent extends Agent {
 	
 	public Coordinates getCoordinates() {
 		return this.coordinates;
+	}
+	
+	public ArrayList<AID> getAirplanesAID() {
+		ArrayList<AID> a = new ArrayList<AID>();
+		for (int i = 0; i < connectedAirplanes.size(); i++) {
+			a.add(connectedAirplanes.get(i).getAID());
+		}
+		return a;
 	}
 }
