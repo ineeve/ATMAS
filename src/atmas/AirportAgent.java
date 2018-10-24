@@ -1,3 +1,4 @@
+package atmas;
 import java.util.ArrayList;
 
 import jade.core.AID;

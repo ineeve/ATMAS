@@ -1,3 +1,4 @@
+package atmas;
 import java.util.ArrayList;
 
 import jade.core.Agent;
@@ -7,16 +8,11 @@ import jade.core.Runtime;
 import jade.wrapper.AgentController;
 import jade.wrapper.ContainerController;
 import jade.wrapper.StaleProxyException;
+import sajas.sim.repasts.RepastSLauncher;
 
-public class JADELauncher {
+public class JADELauncher extends RepastSLauncher {
 
-	public static void main(String[] args) {
-		Runtime rt = Runtime.instance();
-		Profile p1 = new ProfileImpl();
-		ContainerController mainContainer = rt.createMainContainer(p1);
-		setup(mainContainer);
-	}
-	public static void setup(ContainerController mainContainer) {
+	public void setup(ContainerController mainContainer) {
 		
 		int numAirports = 2;
 		int numAirplanes = 5;
@@ -51,6 +47,17 @@ public class JADELauncher {
 		} catch (StaleProxyException e) {
 			e.printStackTrace();
 		}
+	}
+	@Override
+	public String getName() {
+		return "AIAD - SAJaS";
+	}
+	@Override
+	protected void launchJADE() {
+		Runtime rt = Runtime.instance();
+		Profile p1 = new ProfileImpl();
+		ContainerController mainContainer = rt.createMainContainer(p1);
+		setup(mainContainer);
 	}
 
 }
