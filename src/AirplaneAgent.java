@@ -1,8 +1,7 @@
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.TreeSet;
 
 import jade.core.AID;
 import jade.core.Agent;
@@ -27,10 +26,7 @@ public class AirplaneAgent extends Agent {
 	private ArrayList<AirportAgent> airports;
 	private AirportAgent currentAirport;
 	private Integer landingTime;
-	private Integer minLandingtime;
-	private Integer maxLandingTime;
-	public HashMap<AID,Integer> agentView; //the state of the world recognized by this agent
-	public HashMap<Integer,TreeSet<AID>> nogoods;
+	private HashMap<AID,Integer> agentView; //the state of the world recognized by this agent
 	public Integer desiredTime;
 	public Integer minTimeDomain;
 	public Integer maxTimeDomain;
@@ -40,63 +36,112 @@ public class AirplaneAgent extends Agent {
 		this.currentAirport = origin;
 		this.coordinates = origin.getCoordinates();
 		agentView = new HashMap<AID, Integer>();
-		nogoods = new HashMap<Integer, TreeSet<AID>>(); 
 	}
 	public void setup() {
 		 addBehaviour(new TakeoffBehaviour());
 		 addBehaviour(new ProposeListeningBehaviour());
 		 addBehaviour(new RejectProposalListeningBehaviour());
-		 System.out.println(getLocalName() + ": starting takeoff!");
 	}
 	public void takeDown() {
 		 System.out.println(getLocalName() + ": done working.");
 	}
 	
-	public void checkAgentView() {
-		if (agentView.containsValue(desiredTime)) {
-			for(int t = minTimeDomain; t <= maxTimeDomain; t++) {
-				if (!agentView.containsValue(t)) {
-					this.desiredTime = t;
-					ACLMessage msg = new ACLMessage(ACLMessage.PROPOSE);
-					msg.setContent("ok? " + t);
-					ArrayList<AID> otherAgents = currentAirport.getAirplanesAID();
-					for (AID a : otherAgents) {
-						msg.addReceiver(a);
-					}
-					send(msg);
-					return;
-				}
+	public boolean updateMyValue() {
+		for(int t = minTimeDomain; t <= maxTimeDomain; t++) {
+			if (!agentView.containsValue(t)) {
+				this.desiredTime = t;
+				System.out.println(getLocalName() + ": my_value=" + t);
+				return true;
 			}
-			// in case no consistent time domain was found
-			backtrack();
+		}
+		return false;
+	}
+	
+	public ACLMessage buildOkMessage(ArrayList<AID> receivers) {
+		ACLMessage msg = new ACLMessage(ACLMessage.PROPOSE);
+		msg.setContent("ok? " + this.desiredTime);
+		for (AID a : receivers) {
+			msg.addReceiver(a);
+		}
+		return msg;
+	}
+	
+	public ACLMessage buildNoGoodMessage(AID receiver, HashMap<AID,Integer> nogoods) {
+		ACLMessage msg = new ACLMessage(ACLMessage.REJECT_PROPOSAL);
+		StringBuilder msgContent = new StringBuilder("nogood");
+		for (Map.Entry<AID, Integer> entry : nogoods.entrySet()) {
+			msgContent.append(" ");
+			msgContent.append(entry.getKey());
+			msgContent.append(" ");
+			msgContent.append(entry.getValue());
+		}
+		msg.setContent(msgContent.toString());
+		msg.addReceiver(receiver);
+		return msg;
+	}
+	
+	public void printAgentView() {
+		for (Map.Entry<AID, Integer> e : agentView.entrySet()) {
+			System.out.println(" agentView state:" + getLocalName() + " - " + e.getKey().getLocalName() + " : " + e.getValue());
 		}
 	}
 	
-	public void backtrack() {
-		for(Map.Entry<Integer, TreeSet<AID>> entry : nogoods.entrySet()) {
-			Integer v = entry.getKey();
-			TreeSet<AID> t = entry.getValue();
-			AID lowerPriorityAgent = t.last(); // the bigger the AID the lower it's pripority
-			ACLMessage msg = new ACLMessage(ACLMessage.REJECT_PROPOSAL);
-			msg.setContent("nogood " + v);
-			msg.addReceiver(lowerPriorityAgent);
-			send(msg);
+	public void checkAgentView() {
+		if (agentView.containsValue(desiredTime)) {
+			boolean success;
+			do {
+				success = updateMyValue();
+				if (!success) {
+					backtrack();
+				}
+			} while(!success);
+			ArrayList<AID> receivers = currentAirport.getLowerPriorityAirplanesAID(getAID());
+			send(buildOkMessage(receivers));
+				
 		}
+	}
+	
+	public HashMap<AID,Integer> buildNogoods(){
+		HashMap<AID,Integer> nogoods = new HashMap<AID,Integer>();
+		for (int i = minTimeDomain; i <= maxTimeDomain; i++) {
+			for (Map.Entry<AID, Integer> e : agentView.entrySet())
+				if (e.getValue() == i) {
+					nogoods.put(e.getKey(), i);
+				}
+		}
+		return nogoods;
+	}
+	
+	public void backtrack() {
+		// nogoods should contain only the agent view intersected with my desires
+		HashMap<AID,Integer> nogoods = buildNogoods();
+		if (nogoods.size() == 0) {
+			// broadcast to other agents that there is no solution
+			// terminate the algorithm
+			System.err.print("Terminate. NO SOLUTION");
+			takeDown();
+			return;
+		}
+		AID lowerPriorityAgent = Collections.max(nogoods.keySet());
+		ACLMessage msg = buildNoGoodMessage(lowerPriorityAgent, nogoods);
+		send(msg);
+		agentView.remove(lowerPriorityAgent);
 	}
 
 	
 	class TakeoffBehaviour extends Behaviour {
-		 private int n = 0;
 	
 		 public void action() {
-			 AirplaneAgent.this.desiredTime = (int)
-					 (Math.random() * 
-					 AirplaneAgent.this.maxTimeDomain + 
-					 AirplaneAgent.this.minTimeDomain);
+			minTimeDomain = 0;
+			maxTimeDomain = 10;
+			updateMyValue();
+			ArrayList<AID> lowerAgents = currentAirport.getLowerPriorityAirplanesAID(getAID());
+			ACLMessage msg = buildOkMessage(lowerAgents);
+			send(msg);
 			 
 		 }
 		 public boolean done() {
-			 return n == 3;
+			 return true;
 		 }
 	}
 
@@ -104,46 +149,81 @@ public class AirplaneAgent extends Agent {
 		MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.PROPOSE);
 
 		public void action() {
-			ACLMessage msg = receive(mt);
-			if(msg != null) {
-				AID sender = msg.getSender();
-				String[] message = msg.toString().split(" ");
-				// handle ok? here
-				if (message[0]=="ok?") {
-					AirplaneAgent.this.agentView.put(sender, Integer.parseInt(message[1]));
-					checkAgentView();
+			try {
+				ACLMessage msg = receive(mt);
+				if(msg != null) {
+					AID sender = msg.getSender();
+					System.out.println(getLocalName() + ": Received Propose From " + sender.getLocalName() + ": " + msg.getContent());
+					
+					String[] message = msg.getContent().split(" ");
+					// handle ok? here
+					if (message[0].equals("ok?")) {
+						agentView.put(sender, Integer.parseInt(message[1]));
+						checkAgentView();
+					}
+				} else {
+					block();
 				}
-			} else {
-				block();
+			} catch(Exception e) {
+				System.err.println(e);
 			}
+			
 		}
 
 	}
 	class RejectProposalListeningBehaviour extends CyclicBehaviour {
 		MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.REJECT_PROPOSAL);
 		public void action() {
-			ACLMessage msg = receive(mt);
-			if(msg != null) {
-				System.out.println(msg);
-				String[] message = msg.toString().split(" ");
-				AID sender = msg.getSender();
-				// handle nogood here
-				if (message[0]=="nogood") {
-					HashMap<Integer,TreeSet<AID>> nogoods = AirplaneAgent.this.nogoods;
-					for (int i = 1; i < message.length; i++) {
-						Integer time = Integer.parseInt(message[i]);
-						if (nogoods.containsKey(time)) {
-							nogoods.get(time).add(sender);
+			try {
+				ACLMessage msg = receive(mt);
+				if(msg != null) {
+					System.out.println(getLocalName() + ": Received REJECT_PROPOSAL");
+					String[] message = msg.getContent().split(" ");
+					AID sender = msg.getSender();
+					// handle nogood here
+					if (message[0].equals("nogood")) {
+						HashMap<AID, Integer> nogoodReceived = new HashMap<AID,Integer>();
+						for (int i = 1; i < message.length; i+=2) {
+							AID agentId = new AID();
+							agentId.setName(message[i]);
+							Integer value = Integer.parseInt(message[i+1]);
+						}
+						boolean compatible = true;
+						AID myId = AirplaneAgent.this.getAID();
+						if (nogoodReceived.containsKey(myId)) {
+							if (nogoodReceived.get(myId) != AirplaneAgent.this.desiredTime) {
+								compatible = false;
+							}
+						}
+						if (compatible) {
+							for(Map.Entry<AID, Integer> entry : nogoodReceived.entrySet()) {
+								AID key = entry.getKey();
+								Integer v = entry.getValue();
+								if (agentView.containsKey(key)) {
+									if (agentView.get(key) != v) {
+										compatible = false;
+										break;
+									}
+								}
+							}
+						}
+						
+						if (compatible) {
+							checkAgentView();
 						} else {
-							TreeSet<AID> t = new TreeSet<AID>();
-							t.add(sender);
-							nogoods.put(time, t);
+							// send ok?
+							ArrayList<AID> receivers = new ArrayList<AID>() ;
+							receivers.add(sender);
+							send(buildOkMessage(receivers));
 						}
 					}
+				} else {
+					block();
 				}
-			} else {
-				block();
+			} catch (Exception e) {
+				System.err.println(e);
 			}
+			
 		}
 
 	}
