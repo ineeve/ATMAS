@@ -1,6 +1,5 @@
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jade.core.AID;
 import jade.core.Agent;
@@ -9,11 +8,11 @@ import utils.Coordinates;
 public class AirportAgent extends Agent {
 
 	private Coordinates coordinates;
-	private HashSet<AirplaneAgent> connectedAirplanes;
+	private ConcurrentHashMap.KeySetView<AirplaneAgent,Boolean> connectedAirplanes;
 	
 	public AirportAgent(long l, long m){
 		this.coordinates = new Coordinates(l,m);
-		connectedAirplanes = new HashSet<AirplaneAgent>();
+		connectedAirplanes = ConcurrentHashMap.newKeySet();
 	}
 	
 	public Coordinates getCoordinates() {

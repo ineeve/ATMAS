@@ -15,7 +15,6 @@ import utils.State;
 @SuppressWarnings("serial")
 public class AirplaneAgent extends Agent {
 	
-	private int id;
 	private int maxFuel;
 	private int maxSpeed;
 	private int minSpeed;
@@ -38,19 +37,25 @@ public class AirplaneAgent extends Agent {
 		agentView = new HashMap<AID, Integer>();
 	}
 	public void setup() {
-		 addBehaviour(new TakeoffBehaviour());
 		 addBehaviour(new ProposeListeningBehaviour());
 		 addBehaviour(new RejectProposalListeningBehaviour());
 	}
 	public void takeDown() {
 		 System.out.println(getLocalName() + ": done working.");
 	}
+	public void start() {
+		addBehaviour(new TakeoffBehaviour());
+	}
+	
+	public void printState() {
+		System.out.println(getLocalName() + " @ " + currentAirport.getLocalName() + ":desired_time:" + desiredTime);
+	}
 	
 	public boolean updateMyValue() {
 		for(int t = minTimeDomain; t <= maxTimeDomain; t++) {
 			if (!agentView.containsValue(t)) {
 				this.desiredTime = t;
-				System.out.println(getLocalName() + ": my_value=" + t);
+				printState();
 				return true;
 			}
 		}
@@ -71,7 +76,7 @@ public class AirplaneAgent extends Agent {
 		StringBuilder msgContent = new StringBuilder("nogood");
 		for (Map.Entry<AID, Integer> entry : nogoods.entrySet()) {
 			msgContent.append(" ");
-			msgContent.append(entry.getKey());
+			msgContent.append(entry.getKey().getName());
 			msgContent.append(" ");
 			msgContent.append(entry.getValue());
 		}
@@ -80,9 +85,9 @@ public class AirplaneAgent extends Agent {
 		return msg;
 	}
 	
-	public void printAgentView() {
+	private void printAgentView() {
 		for (Map.Entry<AID, Integer> e : agentView.entrySet()) {
-			System.out.println(" agentView state:" + getLocalName() + " - " + e.getKey().getLocalName() + " : " + e.getValue());
+			System.out.println("agentView:"+getLocalName() + " - " + e.getKey().getLocalName() + ":" + e.getValue());
 		}
 	}
 	
@@ -133,7 +138,7 @@ public class AirplaneAgent extends Agent {
 	
 		 public void action() {
 			minTimeDomain = 0;
-			maxTimeDomain = 10;
+			maxTimeDomain = 20;
 			updateMyValue();
 			ArrayList<AID> lowerAgents = currentAirport.getLowerPriorityAirplanesAID(getAID());
 			ACLMessage msg = buildOkMessage(lowerAgents);
@@ -153,12 +158,11 @@ public class AirplaneAgent extends Agent {
 				ACLMessage msg = receive(mt);
 				if(msg != null) {
 					AID sender = msg.getSender();
-					System.out.println(getLocalName() + ": Received Propose From " + sender.getLocalName() + ": " + msg.getContent());
-					
 					String[] message = msg.getContent().split(" ");
 					// handle ok? here
 					if (message[0].equals("ok?")) {
 						agentView.put(sender, Integer.parseInt(message[1]));
+						System.out.println(getLocalName() + " : received ok? from " + sender.getLocalName() + ": value=" + Integer.parseInt(message[1]));
 						checkAgentView();
 					}
 				} else {
