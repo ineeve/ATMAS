@@ -2,12 +2,12 @@ package atmas;
 
 import java.util.ArrayList;
 
-import jade.core.Agent;
+import sajas.core.Agent;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
-import jade.core.Runtime;
-import jade.wrapper.AgentController;
-import jade.wrapper.ContainerController;
+import sajas.core.Runtime;
+import sajas.wrapper.AgentController;
+import sajas.wrapper.ContainerController;
 import jade.wrapper.StaleProxyException;
 import repast.simphony.context.Context;
 import repast.simphony.context.space.continuous.ContinuousSpaceFactory;
@@ -100,13 +100,14 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 		}
 		
 
-		AgentController ac3;
-		try {
-			ac3 = mainContainer.acceptNewAgent("myRMA", new jade.tools.rma.rma());
-			ac3.start();
-		} catch (StaleProxyException e) {
-			e.printStackTrace();
-		}
+		// RMA is incompatible out-the-box with SaJaS.
+//		AgentController ac3;
+//		try {
+//			ac3 = mainContainer.acceptNewAgent("myRMA", new jade.tools.rma.rma());
+//			ac3.start();
+//		} catch (StaleProxyException e) {
+//			e.printStackTrace();
+//		}
 	}
 
 }
