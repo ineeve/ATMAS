@@ -16,9 +16,14 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
 import messages.*;
+import repast.simphony.space.continuous.ContinuousSpace;
+import repast.simphony.space.grid.Grid;
 import utils.Logger;
 
 public class AirplaneAgent extends Agent {
+	
+	private ContinuousSpace<Object> space;
+	private Grid<Object> grid;
 	
 	private int id;
 	private HashMap<Integer,Integer> agentView; //the state of the world recognized by this agent
@@ -29,7 +34,9 @@ public class AirplaneAgent extends Agent {
 	private Set<Integer> currentDomain;
 	
 	
-	public AirplaneAgent(int id, ArrayList<AirportAgent> airports, AirportAgent origin) {
+	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportAgent> airports, AirportAgent origin) {
+		this.space = space;
+		this.grid = grid;
 		this.id = id;
 		this.airports = airports;
 		this.currentAirport = origin;

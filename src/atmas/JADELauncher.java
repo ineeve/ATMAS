@@ -17,6 +17,7 @@ import repast.simphony.context.space.grid.GridFactory;
 import repast.simphony.context.space.grid.GridFactoryFinder;
 import repast.simphony.dataLoader.ContextBuilder;
 import repast.simphony.space.continuous.ContinuousSpace;
+import repast.simphony.space.continuous.NdPoint;
 import repast.simphony.space.continuous.RandomCartesianAdder;
 import repast.simphony.space.grid.Grid;
 import repast.simphony.space.grid.GridBuilderParameters;
@@ -29,7 +30,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	private int numAirports = 1;
 	private int numAirplanes = 5;
 	private int grid_size = 50;
-	ArrayList<AirportAgent> airports = new ArrayList<AirportAgent>();
+	private ArrayList<AirportAgent> airports = new ArrayList<AirportAgent>();
 	
 	private Context<Object> context;
 	private ContinuousSpace<Object> space;
@@ -43,12 +44,12 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	@Override
 	public Context<?> build(Context<Object> context) {
 		this.context = context;
-		context.setId("ATMAS");
+		context.setId("atmas");
 
-		NetworkBuilder<Object> netBuilder = new NetworkBuilder<Object>(
-				"air traffic network", context, true);
-		netBuilder.buildNetwork();
-
+//		NetworkBuilder<Object> netBuilder = new NetworkBuilder<Object>(
+//				"air traffic network", context, true);
+//		netBuilder.buildNetwork();
+//
 		ContinuousSpaceFactory spaceFactory = ContinuousSpaceFactoryFinder
 				.createContinuousSpaceFactory(null);
 		space = spaceFactory.createContinuousSpace(
@@ -76,7 +77,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 		// startup airport agents
 		for(int i = 0; i < numAirports; i++) {
 			try {
-				AirportAgent ag = new AirportAgent(Math.round(Math.random()*grid_size), Math.round(Math.random()*grid_size));
+				AirportAgent ag = new AirportAgent(space, grid, Math.round(Math.random()*grid_size), Math.round(Math.random()*grid_size));
 				mainContainer.acceptNewAgent("airport"+i,ag).start();
 				context.add(ag);
 				airports.add(ag);
@@ -89,7 +90,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			try {
 				int airportIndex = (int)(Math.random()*numAirports);
 				AirportAgent airportSelected = airports.get(airportIndex);
-				AirplaneAgent airplane = new AirplaneAgent(i, airports, airportSelected);
+				AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected);
 				mainContainer.acceptNewAgent("airplane"+i, airplane).start();
 				context.add(airplane);
 			} catch(StaleProxyException e) {
@@ -97,7 +98,11 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			}
 		}
 		
-
+		for (Object obj : context) {
+			NdPoint pt = space.getLocation(obj);
+			grid.moveTo(obj, (int) pt.getX(), (int) pt.getY());
+		}
+		
 		// RMA is incompatible out-the-box with SaJaS.
 //		AgentController ac3;
 //		try {

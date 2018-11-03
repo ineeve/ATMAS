@@ -22,18 +22,25 @@ import messages.M_Disconnect;
 import messages.M_RequestAgents;
 import messages.M_Reset;
 import messages.M_Start;
+import repast.simphony.space.continuous.ContinuousSpace;
+import repast.simphony.space.grid.Grid;
 import utils.Coordinates;
 import utils.Logger;
 
 public class AirportAgent extends Agent {
-
+	
+	private ContinuousSpace<Object> space;
+	private Grid<Object> grid;
+	
 	private Coordinates coordinates;
 	// for each agentId, saves it's AID
 	private TreeMap<Integer, AID> connectedAirplanes;
 	private HashMap<Integer,AID> airplanesConnecting;
 	private boolean reseting = false; // true if airport is in the middle of a reset protocol
 	
-	public AirportAgent(long l, long m){
+	public AirportAgent(ContinuousSpace<Object> space, Grid<Object> grid, long l, long m){
+		this.space = space;
+		this.grid = grid;
 		this.coordinates = new Coordinates(l,m);
 		connectedAirplanes = new TreeMap<Integer,AID>();
 		airplanesConnecting = new HashMap<Integer,AID>();
