@@ -16,6 +16,7 @@ public class ConnectMessage implements Serializable {
 	private int agentId;
 	private AID agentAID;
 	public static int performative = ACLMessage.REQUEST;
+	public static String protocol = "P_CONNECT";
 	
 	public ConnectMessage(int agentId, AID agentAID) {
 		this.agentId = agentId;

@@ -1,6 +1,7 @@
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.TreeMap;
 
 import jade.core.AID;
@@ -22,10 +23,13 @@ public class AirportAgent extends Agent {
 	private Coordinates coordinates;
 	// for each agentId, saves it's AID
 	private TreeMap<Integer, AID> connectedAirplanes;
+	private HashMap<Integer,AID> airplanesConnecting;
+	private boolean reseting = false; // true if airport is in the middle of a reset protocol
 	
 	public AirportAgent(long l, long m){
 		this.coordinates = new Coordinates(l,m);
 		connectedAirplanes = new TreeMap<Integer,AID>();
+		airplanesConnecting = new HashMap<Integer,AID>();
 	}
 	public void setup() {
 		 addBehaviour(new RequestListeningBehaviour());
@@ -67,22 +71,38 @@ public class AirportAgent extends Agent {
 	}
 	
 	private void parseConnectMessage(ConnectMessage msg) {
-		broadcastReset();
-		connectedAirplanes.put(msg.getAgentId(), msg.getAgentAID());
-		waitForACK();
+		airplanesConnecting.put(msg.getAgentId(), msg.getAgentAID());
+		if (!reseting) {
+			reseting = true;
+			addBehaviour(new InitiateResetProtocol());
+		}
 	}
 	
 	private void waitForACK() {
 		addBehaviour(new WaitACKBehaviour());
 	}
+
 	
-	private void broadcastReset() {
-		ResetMessage resetMessage = new ResetMessage();
-		ACLMessage aclMessage = new ACLMessage(ResetMessage.performative);
-		connectedAirplanes.values().forEach(aid -> {
-			aclMessage.addReceiver(aid);
-		});
-		send(aclMessage);
+	public class InitiateResetProtocol extends Behaviour {
+
+		@Override
+		public void action() {
+			ResetMessage resetMessage = new ResetMessage();
+			ACLMessage aclMessage = new ACLMessage(ResetMessage.performative);
+			aclMessage.addReceiver(connectedAirplanes.firstEntry().getValue());
+			aclMessage.setProtocol("P_RESET");
+			send(aclMessage);
+			
+			MessageTemplate mt = MessageTemplate.and(MessageTemplate.MatchProtocol("P_RESET"), MessageTemplate.MatchPerformative(ResetDone.performative));
+			
+		}
+
+		@Override
+		public boolean done() {
+			// TODO Auto-generated method stub
+			return false;
+		}
+		
 	}
 	
 	/**

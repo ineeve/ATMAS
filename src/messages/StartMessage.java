@@ -8,6 +8,7 @@ public class StartMessage implements Serializable{
 
 	private static final long serialVersionUID = -6021604817117227581L;
 	public static int performative = ACLMessage.INFORM;
+	public static String protocol = "P_START";
 
 	public StartMessage() {
 	}

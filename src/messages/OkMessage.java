@@ -10,6 +10,8 @@ public class OkMessage implements Serializable {
 	private int agentId;
 	private int value;
 	public static int perfomative = ACLMessage.PROPOSE;
+	public static String protocol = "P_OK";
+	
 	public OkMessage(int agentId, int value) {
 		this.agentId = agentId;
 		this.value = value;

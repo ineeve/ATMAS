@@ -13,6 +13,7 @@ public class NogoodMessage implements Serializable {
 	// maps agentIds to values
 	private HashMap<Integer,Integer> nogoods;
 	public static int performative = ACLMessage.REJECT_PROPOSAL;
+	public static String protocol = "P_NOGOOD";
 	
 	public NogoodMessage() {
 	}
