@@ -7,5 +7,6 @@
 	</classpathentry>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="lib" path="jade.jar"/>
+	<classpathentry kind="lib" path="C:/Users/ineeve/eclipse-workspace/ATMAS/commons-codec-1.11.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

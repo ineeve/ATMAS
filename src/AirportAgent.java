@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.TreeMap;
 
 import FIPA.FipaMessage;
@@ -13,8 +14,10 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
 import messages.M_ResetDone;
+import messages.M_Agents;
 import messages.M_Connect;
 import messages.M_Disconnect;
+import messages.M_RequestAgents;
 import messages.M_Reset;
 import messages.M_Start;
 import utils.Coordinates;
@@ -35,9 +38,10 @@ public class AirportAgent extends Agent {
 	}
 	public void setup() {
 		 addBehaviour(new ConnectListeningBehaviour());
+		 addBehaviour(new RequestAgentsListeningBehaviour());
 	}
 	public void takeDown() {
-		 System.out.println(getLocalName() + ": done working.");
+		 Logger.printErrMsg(getAID(), "executing takedown");
 	}
 	
 	public Coordinates getCoordinates() {
@@ -55,14 +59,14 @@ public class AirportAgent extends Agent {
 	 * @param id
 	 * @return AID of agent with lower priority than id
 	 */
-	public AID getNextAgent(int id) {
+	private AID getNextAgent(int id) {
 		Integer nextId = connectedAirplanes.higherKey(id);
 		if (nextId == null) return null;
 		return connectedAirplanes.get(nextId);
 	}
 	
-	public ArrayList<AID> getLowerPriorityAgents(int id) {
-		ArrayList<AID> a = new ArrayList<AID>();
+	private HashSet<AID> getLowerPriorityAgents(int id) {
+		HashSet<AID> a = new HashSet<AID>();
 		connectedAirplanes.tailMap(id+1).forEach((k,aid) -> {
 			a.add(aid);
 		});
@@ -118,7 +122,6 @@ public class AirportAgent extends Agent {
 				processResetDone();
 				done = true;
 			} else {
-				System.err.println("Null aclReceived");
 				block();
 				
 			}
@@ -167,35 +170,52 @@ public class AirportAgent extends Agent {
 		}	
 	}
 	
-	public class WaitACKBehaviour extends Behaviour{
+	private HashSet<AID> processRequestAgentsMsg(M_RequestAgents requestAgentsMsg){
+		Integer requesterId = requestAgentsMsg.getAgentId();
+		Integer nAgentsRequested = requestAgentsMsg.getNAgentsToGet();
+		HashSet<AID> agentsToSend;
+		if (nAgentsRequested == 0) {
+			agentsToSend = getLowerPriorityAgents(requesterId);
+		} else {
+			agentsToSend = new HashSet<AID>();
+			agentsToSend.add(getNextAgent(requesterId));
+		}
+		return agentsToSend;
+	}
+	
+	public class RequestAgentsListeningBehaviour extends CyclicBehaviour{
 
-		int requiredACKs = connectedAirplanes.size() - 1; // -1 because of the new airplane that just connected
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_RequestAgents.performative),
+				MessageTemplate.MatchProtocol(M_RequestAgents.protocol));
 		@Override
 		public void action() {
-			MessageTemplate mt = MessageTemplate.MatchPerformative(M_ResetDone.performative);
-			ACLMessage msg = receive(mt);
-			if(msg != null) {
+			ACLMessage aclMessage = receive(mt);
+			if (aclMessage != null) {
+				Logger.printMsg(getAID(), "Received request for agents");
+				M_RequestAgents requestAgentsMsg;
 				try {
-					Serializable serMessage = (M_ResetDone) msg.getContentObject();
-					if (serMessage instanceof M_ResetDone) {
-						if (--requiredACKs == 0) {
-							sendStartMessage();
-						}
-					} else {
-						Logger.printErrMsg(getAID(),"Expecting ACK Message");
-					}
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
+					requestAgentsMsg = (M_RequestAgents) aclMessage.getContentObject();
+				} catch (UnreadableException e) {
 					e.printStackTrace();
+					return;
 				}
+				HashSet<AID> agentsToSend = processRequestAgentsMsg(requestAgentsMsg);
+				ACLMessage reply = aclMessage.createReply();
+				reply.setPerformative(M_Agents.performative);
+				M_Agents agentsContent = new M_Agents(agentsToSend);
+				try {
+					reply.setContentObject(agentsContent);
+				} catch (IOException e) {
+					e.printStackTrace();
+					return;
+				}
+				send(reply);
+				Logger.printMsg(getAID(), "Sent reply to request for agents");
+				
 			} else {
 				block();
 			}
-		}
-
-		@Override
-		public boolean done() {
-			return requiredACKs == 0;
 		}
 	}
 }

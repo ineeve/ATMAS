@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -63,20 +64,64 @@ public class AirplaneAgent extends Agent {
 		return true;
 	}
 	
-	private void sendOkMessage() {
-		ACLMessage aclMessage = new ACLMessage(M_Ok.perfomative);
+	/**
+	 * 
+	 * @return HashSet with AIDs of all lower priority agents connected to currentAirport
+	 */
+	private HashSet<AID> getLowerPriorityAgents(String replyWith) {
+		
+		MessageTemplate mt = MessageTemplate.MatchProtocol(M_Agents.protocol);
+		ACLMessage agentsACLMsg = blockingReceive(mt);
+		
+		M_Agents agentsMsg;
 		try {
-			aclMessage.setProtocol(M_Ok.protocol);
-			aclMessage.setContentObject(new M_Ok(id, value));
+			agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
+		} catch (UnreadableException e) {
+			e.printStackTrace();
+			return null;
+		}
+		return agentsMsg.getAgents();
+	}
+	
+	/**
+	 * 
+	 * @param N Number of lower priority agents to request. 0 gets all of them.
+	 * @return Reply with
+	 */
+	private String requestLowerPriorityAgents(int N) {
+		M_RequestAgents requestAgentsMsg = new M_RequestAgents(id, N);
+		ACLMessage msg = new ACLMessage(M_RequestAgents.performative);
+		msg.addReceiver(currentAirport.getAID());
+		msg.setProtocol(M_RequestAgents.protocol);
+		msg.setReplyWith(requestAgentsMsg.getReplyWith());
+		try {
+			msg.setContentObject(requestAgentsMsg);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+		send(msg);
+		return requestAgentsMsg.getReplyWith();
+	}
+	
+	
+	private void sendOkMessage() {
+		ACLMessage aclOkMessage = new ACLMessage(M_Ok.perfomative);
+		try {
+			aclOkMessage.setProtocol(M_Ok.protocol);
+			aclOkMessage.setContentObject(new M_Ok(id, value));
 		} catch (IOException e) {
 			Logger.printErrMsg(getAID(), e.getMessage());
 			return;
 		}
-		ArrayList<AID> lowerPAgents = currentAirport.getLowerPriorityAgents(id); // Replace by a message protocol
-		for (AID aid : lowerPAgents) {
-			aclMessage.addReceiver(aid);
+		String replyWith = requestLowerPriorityAgents(0);
+		HashSet<AID> lowerAgents = getLowerPriorityAgents(replyWith);
+		if (lowerAgents != null) {
+			for (AID aid : lowerAgents) {
+				aclOkMessage.addReceiver(aid);
+			}
 		}
-		send(aclMessage);
+		send(aclOkMessage);
 	}
 
 	private void sendResetDone(AID higherPriorityAgent) {
@@ -88,8 +133,6 @@ public class AirplaneAgent extends Agent {
 	
 	public void parseOkMessage(M_Ok okMessage) {
 		Integer senderPrevValue = agentView.put(okMessage.getAgentId(), okMessage.getValue());
-		Logger.printMsg(getAID(), "Sender prev value: " + senderPrevValue);
-		Logger.printMsg(getAID(), "OkMessageValue: " + okMessage.getValue());
 		if (senderPrevValue == okMessage.getValue()) {
 			// no update was done, do nothing
 			return;
@@ -108,13 +151,17 @@ public class AirplaneAgent extends Agent {
 	 * @return True if reset was send to child, false if there was no child
 	 */
 	private boolean sendResetToChild() {
-		AID child = currentAirport.getNextAgent(id);
-		if (child != null) {
-			ACLMessage msg = new ACLMessage(M_Reset.performative);
-			msg.setProtocol(M_Reset.protocol);
-			msg.addReceiver(child);
-			send(msg);
-			return true;
+		String replyWith = requestLowerPriorityAgents(1);
+		HashSet<AID> lowerPriorityAgents = getLowerPriorityAgents(replyWith);
+		if (lowerPriorityAgents != null) {
+			AID child = lowerPriorityAgents.iterator().next(); // there's only 1
+			if (child != null) {
+				ACLMessage msg = new ACLMessage(M_Reset.performative);
+				msg.setProtocol(M_Reset.protocol);
+				msg.addReceiver(child);
+				send(msg);
+				return true;
+			}
 		}
 		return false;
 		
