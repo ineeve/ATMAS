@@ -44,8 +44,8 @@ public class AirplaneAgent extends Agent {
 	
 	public void setup() {
 		addBehaviour(new ConnectToAirportBehaviour());
+		addBehaviour(new SetDomainBehaviour());
 		addBehaviour(new OkListeningBehaviour());
-		addBehaviour(new InitializeBehaviour());
 		addBehaviour(new ResetBehaviour());
 		addBehaviour(new StartBehaviour());
 	}
@@ -66,7 +66,7 @@ public class AirplaneAgent extends Agent {
 	private void sendOkMessage() {
 		ACLMessage aclMessage = new ACLMessage(M_Ok.perfomative);
 		try {
-			aclMessage.setProtocol(M_Stop.protocol);
+			aclMessage.setProtocol(M_Ok.protocol);
 			aclMessage.setContentObject(new M_Ok(id, value));
 		} catch (IOException e) {
 			Logger.printErrMsg(getAID(), e.getMessage());
@@ -88,6 +88,8 @@ public class AirplaneAgent extends Agent {
 	
 	public void parseOkMessage(M_Ok okMessage) {
 		Integer senderPrevValue = agentView.put(okMessage.getAgentId(), okMessage.getValue());
+		Logger.printMsg(getAID(), "Sender prev value: " + senderPrevValue);
+		Logger.printMsg(getAID(), "OkMessageValue: " + okMessage.getValue());
 		if (senderPrevValue == okMessage.getValue()) {
 			// no update was done, do nothing
 			return;
@@ -191,7 +193,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage startMsg = receive(mt);
 			if (startMsg != null) {
-				addBehaviour(new InitializeBehaviour());
+				Logger.printMsg(getAID(), "received start");
 				chooseNewValue();
 				sendOkMessage();
 			} else {
@@ -222,18 +224,16 @@ public class AirplaneAgent extends Agent {
 	}
 		
 	
-	class InitializeBehaviour extends Behaviour {
+	class SetDomainBehaviour extends Behaviour {
 
 		boolean done = false;
 		@Override
 		public void action() {
-			if (originalDomain.size() == 0) {
-				int domainSize = 10;
-				// initialize domains
-				for (int i = 0; i < domainSize; i++) {
-					originalDomain.add(i);
-					currentDomain.add(i);
-				}
+			int domainSize = 10;
+			// initialize domains
+			for (int i = 0; i < domainSize; i++) {
+				originalDomain.add(i);
+				currentDomain.add(i);
 			}
 			done = true;
 			
