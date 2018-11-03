@@ -46,10 +46,6 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 		this.context = context;
 		context.setId("atmas");
 
-//		NetworkBuilder<Object> netBuilder = new NetworkBuilder<Object>(
-//				"air traffic network", context, true);
-//		netBuilder.buildNetwork();
-//
 		ContinuousSpaceFactory spaceFactory = ContinuousSpaceFactoryFinder
 				.createContinuousSpaceFactory(null);
 		space = spaceFactory.createContinuousSpace(
