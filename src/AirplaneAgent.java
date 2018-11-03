@@ -13,6 +13,7 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
 import messages.*;
+import utils.Logger;
 
 public class AirplaneAgent extends Agent {
 	
@@ -23,7 +24,6 @@ public class AirplaneAgent extends Agent {
 	private Integer value;
 	private Set<Integer> originalDomain;
 	private Set<Integer> currentDomain;
-	private AID agentWhoAskedForReset;
 	
 	
 	public AirplaneAgent(int id, ArrayList<AirportAgent> airports, AirportAgent origin) {
@@ -36,41 +36,40 @@ public class AirplaneAgent extends Agent {
 		
 	}
 	
-	private void reset() {
+	private void resetState() {
 		agentView = new HashMap<Integer, Integer>();
-		currentDomain.clear();
 		currentDomain.addAll(originalDomain);
 		value = null;
 	}
 	
 	public void setup() {
-		 addBehaviour(new InitializeBehaviour());
-		 addBehaviour(new OkListeningBehaviour());
+		addBehaviour(new ConnectToAirportBehaviour());
+		addBehaviour(new OkListeningBehaviour());
+		addBehaviour(new InitializeBehaviour());
+		addBehaviour(new ResetBehaviour());
+		addBehaviour(new StartBehaviour());
 	}
 	public void takeDown() {
-		 System.out.println(getLocalName() + ": done working.");
+		 Logger.printErrMsg(getAID(),"takedown");
 	}
 	public int getId() {
 		return id;
 	}
 	
-	public void printErr(String msg) {
-		System.err.println("airplane " + id + ": " + msg);
-	}
-	
 	private boolean chooseNewValue() {
 		if (currentDomain.size() == 0) return false;
 		value = currentDomain.iterator().next();
-		System.out.println(id + " - updated value to " + value);
+		Logger.printMsg(getAID(), "updated value to " + value);
 		return true;
 	}
 	
 	private void sendOkMessage() {
-		ACLMessage aclMessage = new ACLMessage(OkMessage.perfomative);
+		ACLMessage aclMessage = new ACLMessage(M_Ok.perfomative);
 		try {
-			aclMessage.setContentObject(new OkMessage(id, value));
+			aclMessage.setProtocol(M_Stop.protocol);
+			aclMessage.setContentObject(new M_Ok(id, value));
 		} catch (IOException e) {
-			System.err.println(e.getMessage());
+			Logger.printErrMsg(getAID(), e.getMessage());
 			return;
 		}
 		ArrayList<AID> lowerPAgents = currentAirport.getLowerPriorityAgents(id); // Replace by a message protocol
@@ -81,18 +80,13 @@ public class AirplaneAgent extends Agent {
 	}
 
 	private void sendResetDone(AID higherPriorityAgent) {
-		ACLMessage resetDoneMessage = new ACLMessage(ResetDone.performative);
-		try {
-			resetDoneMessage.setContentObject(new ResetDone());
-		} catch (IOException e) {
-			System.err.println(e.getMessage());
-			return;
-		}
+		ACLMessage resetDoneMessage = new ACLMessage(M_ResetDone.performative);
+		resetDoneMessage.setProtocol(M_ResetDone.protocol);
 		resetDoneMessage.addReceiver(higherPriorityAgent);
 		send(resetDoneMessage);
 	}
 	
-	public void parseOkMessage(OkMessage okMessage) {
+	public void parseOkMessage(M_Ok okMessage) {
 		Integer senderPrevValue = agentView.put(okMessage.getAgentId(), okMessage.getValue());
 		if (senderPrevValue == okMessage.getValue()) {
 			// no update was done, do nothing
@@ -114,15 +108,10 @@ public class AirplaneAgent extends Agent {
 	private boolean sendResetToChild() {
 		AID child = currentAirport.getNextAgent(id);
 		if (child != null) {
-			ResetMessage resetMessage = new ResetMessage();
-			ACLMessage msg = new ACLMessage(ResetMessage.performative);
-			try {
-				msg.setContentObject(resetMessage);
-				msg.addReceiver(child);
-				send(msg);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			ACLMessage msg = new ACLMessage(M_Reset.performative);
+			msg.setProtocol(M_Reset.protocol);
+			msg.addReceiver(child);
+			send(msg);
 			return true;
 		}
 		return false;
@@ -130,16 +119,15 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	class OkListeningBehaviour extends CyclicBehaviour {
-		MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.PROPOSE);
+		MessageTemplate mt = MessageTemplate.and(MessageTemplate.MatchPerformative(M_Ok.perfomative), MessageTemplate.MatchProtocol(M_Ok.protocol));
 
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
 				try {
-					OkMessage okMessage = (OkMessage) msg.getContentObject();
+					M_Ok okMessage = (M_Ok) msg.getContentObject();
 					parseOkMessage(okMessage);
 				} catch (UnreadableException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 			} else {
@@ -149,85 +137,138 @@ public class AirplaneAgent extends Agent {
 
 	}
 	
-	public class InformListeningBehaviour extends CyclicBehaviour {
+	
+	
+	class ResetBehaviour extends CyclicBehaviour {
 		
-		MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.INFORM);
+		MessageTemplate mtReset = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_Reset.performative),
+				MessageTemplate.MatchProtocol(M_Reset.protocol));
+		
+		MessageTemplate mtResetDone = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_ResetDone.performative),
+				MessageTemplate.MatchProtocol(M_ResetDone.protocol));
+		
+		boolean resetReceived = false;
+		AID agentWhoAskedReset;
+		
 		@Override
 		public void action() {
-			ACLMessage msg = receive(mt);
-			if (msg != null) {
-				try {
-					Serializable receivedMsg = msg.getContentObject();
-					if (receivedMsg instanceof StartMessage) {
-						
-					} else if (receivedMsg instanceof StopMessage) {
-						
-					} else if (receivedMsg instanceof ResetDone){
-						reset();
-						sendResetDone(agentWhoAskedForReset);
-					} else {
-						printErr("Invalid inform message");
+			if (!resetReceived) {
+				ACLMessage resetMsg = receive(mtReset);
+				if (resetMsg != null) {
+					agentWhoAskedReset = resetMsg.getSender();
+					resetReceived = true;
+					if (!sendResetToChild()) {
+						resetState();
+						sendResetDone(agentWhoAskedReset);
 					}
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+				} else {
+					block();
 				}
+			}
+			
+			if (resetReceived) {
+				// reset was received and sent, now wait for response
+				ACLMessage resetDoneMsg = receive(mtResetDone);
+				if (resetDoneMsg != null) {
+					reset();
+					sendResetDone(agentWhoAskedReset);
+				} else {
+					block();
+				}
+			}
+		}
+	}
+		
+	class StartBehaviour extends CyclicBehaviour {
+
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_Start.performative),
+				MessageTemplate.MatchProtocol(M_Start.protocol));
+		
+		@Override
+		public void action() {
+			ACLMessage startMsg = receive(mt);
+			if (startMsg != null) {
+				addBehaviour(new InitializeBehaviour());
+				chooseNewValue();
+				sendOkMessage();
+			} else {
+				block();
 			}
 			
 		}
 	}
 	
-	
-	
-	public class PropagateListeningBehaviour extends CyclicBehaviour {
-		
-		MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.PROPAGATE);
+	class StopBehaviour extends CyclicBehaviour {
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_Start.performative),
+				MessageTemplate.MatchProtocol(M_Start.protocol));
+
 		@Override
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if (msg != null) {
-				Serializable receivedMsg;
-				try {
-					agentWhoAskedForReset = msg.getSender();
-					receivedMsg = msg.getContentObject();
-					if (receivedMsg instanceof ResetMessage) {
-						if (!sendResetToChild()) {
-							reset();
-							sendResetDone(msg.getSender());
-						}
-					} else {
-						printErr("Invalid propagate message");
-					}
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				
+				takeDown();
+			} else {
+				block();
 			}
-		}	
+			
+		}
+		
+		
+		
 	}
 		
 	
-	public class InitializeBehaviour extends Behaviour {
+	class InitializeBehaviour extends Behaviour {
 
+		boolean done = false;
 		@Override
 		public void action() {
-			int domainSize = 10;
-			// initialize domains
-			for (int i = 0; i < domainSize; i++) {
-				originalDomain.add(i);
-				currentDomain.add(i);
+			if (originalDomain.size() == 0) {
+				int domainSize = 10;
+				// initialize domains
+				for (int i = 0; i < domainSize; i++) {
+					originalDomain.add(i);
+					currentDomain.add(i);
+				}
 			}
-			// choose new value
-			chooseNewValue();
-			sendOkMessage();
+			done = true;
 			
 		}
 
 		@Override
 		public boolean done() {
-			// TODO Auto-generated method stub
-			return false;
+			return done;
+		}
+		
+	}
+	
+	class ConnectToAirportBehaviour extends Behaviour {
+
+		boolean done = false;
+		@Override
+		public void action() {
+			Logger.printMsg(getAID(), "Starting Connect Protocol");
+			M_Connect connectMsg = new M_Connect(id, getAID());
+			ACLMessage aclMsg = new ACLMessage(M_Connect.performative);
+			aclMsg.setProtocol(M_Connect.protocol);
+			try {
+				aclMsg.setContentObject(connectMsg);
+			} catch (IOException e) {
+				e.printStackTrace();
+				return;
+			}
+			aclMsg.addReceiver(currentAirport.getAID());
+			send(aclMsg);
+			done = true;
+		}
+
+		@Override
+		public boolean done() {
+			return done;
 		}
 		
 	}

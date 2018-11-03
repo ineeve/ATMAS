@@ -10,7 +10,7 @@ import jade.lang.acl.ACLMessage;
  * @author ineeve
  *
  */
-public class ConnectMessage implements Serializable {
+public class M_Connect implements Serializable {
 
 	private static final long serialVersionUID = 4044390113376790821L;
 	private int agentId;
@@ -18,7 +18,7 @@ public class ConnectMessage implements Serializable {
 	public static int performative = ACLMessage.REQUEST;
 	public static String protocol = "P_CONNECT";
 	
-	public ConnectMessage(int agentId, AID agentAID) {
+	public M_Connect(int agentId, AID agentAID) {
 		this.agentId = agentId;
 		this.agentAID = agentAID;
 	}

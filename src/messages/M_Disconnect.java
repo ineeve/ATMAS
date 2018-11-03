@@ -10,14 +10,14 @@ import jade.lang.acl.ACLMessage;
  * @author ineeve
  *
  */
-public class DisconnectMessage implements Serializable {
+public class M_Disconnect implements Serializable {
 
 	private static final long serialVersionUID = -3414042195353745941L;
 	private int agentId;
 	public static int performative = ACLMessage.INFORM;
 	public static String protocol = "P_DISCONNECT";
 	
-	public DisconnectMessage(int agentId) {
+	public M_Disconnect(int agentId) {
 		this.agentId = agentId;
 	}
 	

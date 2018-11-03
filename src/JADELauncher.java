@@ -19,7 +19,7 @@ public class JADELauncher {
 	public static void setup(ContainerController mainContainer) {
 		
 		int numAirports = 1;
-		int numAirplanes = 6;
+		int numAirplanes = 1;
 		int grid_size = 50;
 		ArrayList<AirportAgent> airports = new ArrayList<AirportAgent>();
 		for(int i = 0; i < numAirports; i++) {
@@ -32,14 +32,11 @@ public class JADELauncher {
 				e.printStackTrace();
 			}
 		}
-		ArrayList<AirplaneAgent> airplanes = new ArrayList<AirplaneAgent>();
 		for (int i = 0; i < numAirplanes; i++) {
 			try {
 				int airportIndex = (int)(Math.random()*numAirports);
 				AirportAgent airportSelected = airports.get(airportIndex);
 				AirplaneAgent airplane = new AirplaneAgent(i, airports, airportSelected);
-				airportSelected.addAirplaneAgent(airplane);
-				airplanes.add(airplane);
 				AgentController ap = mainContainer.acceptNewAgent("airplane"+i, airplane);
 				ap.start();
 			} catch(StaleProxyException e) {

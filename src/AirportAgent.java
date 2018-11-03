@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.TreeMap;
 
+import FIPA.FipaMessage;
 import jade.core.AID;
 import jade.core.Agent;
 import jade.core.behaviours.Behaviour;
@@ -11,12 +12,13 @@ import jade.core.behaviours.CyclicBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
-import messages.ResetDone;
-import messages.ConnectMessage;
-import messages.DisconnectMessage;
-import messages.ResetMessage;
-import messages.StartMessage;
+import messages.M_ResetDone;
+import messages.M_Connect;
+import messages.M_Disconnect;
+import messages.M_Reset;
+import messages.M_Start;
 import utils.Coordinates;
+import utils.Logger;
 
 public class AirportAgent extends Agent {
 
@@ -32,7 +34,7 @@ public class AirportAgent extends Agent {
 		airplanesConnecting = new HashMap<Integer,AID>();
 	}
 	public void setup() {
-		 addBehaviour(new RequestListeningBehaviour());
+		 addBehaviour(new ConnectListeningBehaviour());
 	}
 	public void takeDown() {
 		 System.out.println(getLocalName() + ": done working.");
@@ -41,10 +43,10 @@ public class AirportAgent extends Agent {
 	public Coordinates getCoordinates() {
 		return this.coordinates;
 	}
-	public void addAirplaneAgent(ConnectMessage connectMsg) {
+	public void addAirplaneAgent(M_Connect connectMsg) {
 		connectedAirplanes.put(connectMsg.getAgentId(), connectMsg.getAgentAID());
 	}
-	public void removeAirplaneAgent(DisconnectMessage msg) {
+	public void removeAirplaneAgent(M_Disconnect msg) {
 		connectedAirplanes.remove(msg.getAgentId());
 	}
 	
@@ -70,37 +72,61 @@ public class AirportAgent extends Agent {
 		return connectedAirplanes.lastEntry().getValue();
 	}
 	
-	private void parseConnectMessage(ConnectMessage msg) {
+	private void parseConnectMessage(M_Connect msg) {
 		airplanesConnecting.put(msg.getAgentId(), msg.getAgentAID());
+		Logger.printMsg(getAID(), "Airplane " + msg.getAgentId() + " is trying to connect");
 		if (!reseting) {
 			reseting = true;
 			addBehaviour(new InitiateResetProtocol());
 		}
 	}
 	
-	private void waitForACK() {
-		addBehaviour(new WaitACKBehaviour());
+	private void processResetDone() {
+		connectedAirplanes.putAll(airplanesConnecting);
+		airplanesConnecting.clear();
+		reseting = false;
+		sendStartMessage();
 	}
-
 	
 	public class InitiateResetProtocol extends Behaviour {
 
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchProtocol(M_ResetDone.protocol),
+				MessageTemplate.MatchPerformative(M_ResetDone.performative));
+		boolean resetSent = false;
+		boolean done = false;
+		
 		@Override
 		public void action() {
-			ResetMessage resetMessage = new ResetMessage();
-			ACLMessage aclMessage = new ACLMessage(ResetMessage.performative);
-			aclMessage.addReceiver(connectedAirplanes.firstEntry().getValue());
-			aclMessage.setProtocol("P_RESET");
-			send(aclMessage);
+			if (connectedAirplanes.size() == 0) {
+				processResetDone();
+				done = true;
+				return;
+			}
+			if (!resetSent) {
+				System.out.println("Airport Sending Reset");
+				ACLMessage aclMessage = new ACLMessage(M_Reset.performative);
+				aclMessage.addReceiver(connectedAirplanes.firstEntry().getValue());
+				aclMessage.setProtocol(M_Reset.protocol);
+				send(aclMessage);
+				resetSent = true;
+			}
 			
-			MessageTemplate mt = MessageTemplate.and(MessageTemplate.MatchProtocol("P_RESET"), MessageTemplate.MatchPerformative(ResetDone.performative));
-			
+			// wait for ResetDone
+			ACLMessage aclReceived = receive(mt);
+			if (aclReceived != null) {
+				processResetDone();
+				done = true;
+			} else {
+				System.err.println("Null aclReceived");
+				block();
+				
+			}
 		}
 
 		@Override
 		public boolean done() {
-			// TODO Auto-generated method stub
-			return false;
+			return done;
 		}
 		
 	}
@@ -110,9 +136,10 @@ public class AirportAgent extends Agent {
 	 */
 	public void sendStartMessage() {
 		AID mostPriorityAgent = connectedAirplanes.firstEntry().getValue();
-		StartMessage startMsg = new StartMessage();
-		ACLMessage aclMessage = new ACLMessage(StartMessage.performative);
+		M_Start startMsg = new M_Start();
+		ACLMessage aclMessage = new ACLMessage(M_Start.performative);
 		try {
+			aclMessage.setProtocol(M_Start.protocol);
 			aclMessage.setContentObject(startMsg);
 			aclMessage.addReceiver(mostPriorityAgent);
 			send(aclMessage);
@@ -121,14 +148,16 @@ public class AirportAgent extends Agent {
 		}
 	}
 	
-	public class RequestListeningBehaviour extends CyclicBehaviour{
-		MessageTemplate mt = MessageTemplate.MatchPerformative(ACLMessage.REQUEST);
+	public class ConnectListeningBehaviour extends CyclicBehaviour{
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_Connect.performative),
+				MessageTemplate.MatchProtocol(M_Connect.protocol));
 		@Override
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
 				try {
-					ConnectMessage connectMsg = (ConnectMessage) msg.getContentObject();
+					M_Connect connectMsg = (M_Connect) msg.getContentObject();
 					parseConnectMessage(connectMsg);
 				} catch (UnreadableException e) {
 					e.printStackTrace();
@@ -143,17 +172,17 @@ public class AirportAgent extends Agent {
 		int requiredACKs = connectedAirplanes.size() - 1; // -1 because of the new airplane that just connected
 		@Override
 		public void action() {
-			MessageTemplate mt = MessageTemplate.MatchPerformative(ResetDone.performative);
+			MessageTemplate mt = MessageTemplate.MatchPerformative(M_ResetDone.performative);
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
 				try {
-					Serializable serMessage = (ResetDone) msg.getContentObject();
-					if (serMessage instanceof ResetDone) {
+					Serializable serMessage = (M_ResetDone) msg.getContentObject();
+					if (serMessage instanceof M_ResetDone) {
 						if (--requiredACKs == 0) {
 							sendStartMessage();
 						}
 					} else {
-						printErrMessage("Expecting ACK Message");
+						Logger.printErrMsg(getAID(),"Expecting ACK Message");
 					}
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
@@ -168,9 +197,5 @@ public class AirportAgent extends Agent {
 		public boolean done() {
 			return requiredACKs == 0;
 		}
-	}
-	
-	private void printErrMessage(String msg) {
-		System.err.println(getAID().getLocalName() + ": " + msg);
 	}
 }

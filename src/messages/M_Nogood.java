@@ -7,7 +7,7 @@ import jade.lang.acl.ACLMessage;
 import utils.Nogood;
 
 
-public class NogoodMessage implements Serializable {
+public class M_Nogood implements Serializable {
 	
 	private static final long serialVersionUID = -7178093960057801334L;
 	// maps agentIds to values
@@ -15,7 +15,7 @@ public class NogoodMessage implements Serializable {
 	public static int performative = ACLMessage.REJECT_PROPOSAL;
 	public static String protocol = "P_NOGOOD";
 	
-	public NogoodMessage() {
+	public M_Nogood() {
 	}
 	
 	public void addNoGood(Nogood nogood) {
