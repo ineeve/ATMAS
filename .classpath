@@ -9,7 +9,7 @@
 	<classpathentry kind="con" path="GROOVY_SUPPORT"/>
 	<classpathentry kind="con" path="GROOVY_DSL_SUPPORT"/>
 	<classpathentry kind="con" path="REPAST_SIMPHONY_SUPPORT"/>
-	<classpathentry kind="lib" path="C:/Users/joaof/Documents/FEUP/4_Ano/AIAD/ATMAS/jade.jar"/>
-	<classpathentry kind="lib" path="C:/Users/joaof/Documents/FEUP/4_Ano/AIAD/ATMAS/SAJaS.jar"/>
+	<classpathentry kind="lib" path="C:/Users/joaof/Documents/FEUP/4_Ano/AIAD/ATMAS/lib/jade.jar"/>
+	<classpathentry kind="lib" path="C:/Users/joaof/Documents/FEUP/4_Ano/AIAD/ATMAS/lib/SAJaS.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
