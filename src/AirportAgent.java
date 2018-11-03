@@ -54,6 +54,13 @@ public class AirportAgent extends Agent {
 		connectedAirplanes.remove(msg.getAgentId());
 	}
 	
+	
+	private AID getPreviousAgent(int id) {
+		Integer nextId = connectedAirplanes.lowerKey(id);
+		if (nextId == null) return null;
+		return connectedAirplanes.get(nextId);
+	}
+	
 	/**
 	 * Obtains agent which has lower priority than id
 	 * @param id
@@ -173,12 +180,20 @@ public class AirportAgent extends Agent {
 	private HashSet<AID> processRequestAgentsMsg(M_RequestAgents requestAgentsMsg){
 		Integer requesterId = requestAgentsMsg.getAgentId();
 		Integer nAgentsRequested = requestAgentsMsg.getNAgentsToGet();
-		HashSet<AID> agentsToSend;
-		if (nAgentsRequested == 0) {
+		HashSet<AID> agentsToSend = new HashSet<AID>();
+		switch(nAgentsRequested) {
+		case 0:
 			agentsToSend = getLowerPriorityAgents(requesterId);
-		} else {
-			agentsToSend = new HashSet<AID>();
+			break;
+		case 1:
 			agentsToSend.add(getNextAgent(requesterId));
+			break;
+		case -1:
+			agentsToSend.add(getPreviousAgent(requesterId));
+			break;
+		default:
+			Logger.printErrMsg(getAID(), "Unexpected no. agents requested");
+			break;
 		}
 		return agentsToSend;
 	}
@@ -192,7 +207,7 @@ public class AirportAgent extends Agent {
 		public void action() {
 			ACLMessage aclMessage = receive(mt);
 			if (aclMessage != null) {
-				Logger.printMsg(getAID(), "Received request for agents");
+				//Logger.printMsg(getAID(), "Received request for agents");
 				M_RequestAgents requestAgentsMsg;
 				try {
 					requestAgentsMsg = (M_RequestAgents) aclMessage.getContentObject();
@@ -211,7 +226,7 @@ public class AirportAgent extends Agent {
 					return;
 				}
 				send(reply);
-				Logger.printMsg(getAID(), "Sent reply to request for agents");
+				//Logger.printMsg(getAID(), "Sent reply to request for agents");
 				
 			} else {
 				block();

@@ -1,24 +1,25 @@
 package utils;
 
+import jade.core.AID;
+
 //Represent a nogood of ABT protocol
 public class Nogood {
-	private int agentId;
-	private int value;
+	private Integer agentId;
+	private AgentViewValue value;
 	
-	public Nogood(int agentId, int value) {
+	public Nogood(int agentId, AgentViewValue value) {
 		this.agentId = agentId;
 		this.value = value;
 	}
+	
+	public Integer getAgentId() {
+		return agentId;
+	}
 
-	public int getValue() {
+	public AgentViewValue getValue() {
 		return value;
 	}
 
-
-	public int getAgentId() {
-		return agentId;
-	}
-	
 	
 }
 

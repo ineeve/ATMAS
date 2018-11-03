@@ -22,7 +22,7 @@ public class M_RequestAgents implements Serializable {
 	/**
 	 * 
 	 * @param agentId id of Agent making the request
-	 * @param nAgentsToGet 0 if getting all descendants, 1 if getting first child, etc.
+	 * @param nAgentsToGet 0 if getting all descendants, 1 if getting first child, -1 if getting parent
 	 */
 	public M_RequestAgents(Integer agentId, Integer nAgentsToGet){
 		this.agentId = agentId;
