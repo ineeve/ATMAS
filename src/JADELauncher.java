@@ -19,7 +19,7 @@ public class JADELauncher {
 	public static void setup(ContainerController mainContainer) {
 		
 		int numAirports = 1;
-		int numAirplanes = 5;
+		int numAirplanes = 2;
 		int grid_size = 50;
 		ArrayList<AirportAgent> airports = new ArrayList<AirportAgent>();
 		for(int i = 0; i < numAirports; i++) {

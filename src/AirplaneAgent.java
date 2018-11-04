@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.Map.Entry;
 
 import jade.core.AID;
 import jade.core.Agent;
@@ -24,13 +25,16 @@ public class AirplaneAgent extends Agent {
 	
 	private int id;
 	private TreeMap<Integer, AgentViewValue> agentView; //the state of the world recognized by this agent
+	private ArrayList<HashSet<Nogood>> nogoodStore; // use to check for duplicated nogoods
 	private ArrayList<AirportAgent> airports;
 	private AirportAgent currentAirport;
+	private TreeMap<Integer,AID> agentsInAirport;
 	private Integer value;
 	private Set<Integer> originalDomain;
 	private Set<Integer> currentDomain;
 	private Behaviour okListeningBehaviour;
 	private Behaviour nogoodListeningBehaviour;
+	
 	
 	
 	public AirplaneAgent(int id, ArrayList<AirportAgent> airports, AirportAgent origin) {
@@ -40,6 +44,8 @@ public class AirplaneAgent extends Agent {
 		originalDomain = new TreeSet<Integer>();
 		currentDomain = new TreeSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
+		agentsInAirport = new TreeMap<Integer,AID>();
+		nogoodStore = new ArrayList<HashSet<Nogood>>();
 		
 	}
 	
@@ -53,6 +59,7 @@ public class AirplaneAgent extends Agent {
 		okListeningBehaviour = new OkListeningBehaviour();
 		nogoodListeningBehaviour = new NogoodListeningBehaviour();
 		addBehaviour(new ConnectToAirportBehaviour());
+		addBehaviour(new ConnectListeningBehaviour());
 		addBehaviour(new SetDomainBehaviour());
 		addBehaviour(okListeningBehaviour);
 		addBehaviour(nogoodListeningBehaviour);
@@ -69,6 +76,10 @@ public class AirplaneAgent extends Agent {
 		return id;
 	}
 	
+	private TreeMap<Integer,AID> getLowerPriorityAgents() {
+		return (TreeMap<Integer, AID>) agentsInAirport.tailMap(id+1);
+	}
+	
 	private boolean chooseNewValue() {
 		if (currentDomain.size() == 0) return false;
 		value = currentDomain.iterator().next();
@@ -76,51 +87,9 @@ public class AirplaneAgent extends Agent {
 		return true;
 	}
 	
-	/**
-	 * 
-	 * @return HashSet with AIDs previously requested agents
-	 */
-	private HashSet<AID> getAgents(String replyWith) {
-		
-		MessageTemplate mt = MessageTemplate.MatchProtocol(M_Agents.protocol);
-		ACLMessage agentsACLMsg = blockingReceive(mt);
-		
-		M_Agents agentsMsg;
-		try {
-			agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
-		} catch (UnreadableException e) {
-			e.printStackTrace();
-			return null;
-		}
-		return agentsMsg.getAgents();
-	}
-	
-	/**
-	 * 
-	 * @param N Number of lower priority agents to request. 0 gets all of them. -1 gets parent
-	 * @return Reply with
-	 */
-	private String requestAgents(int N) {
-		M_RequestAgents requestAgentsMsg = new M_RequestAgents(id, N);
-		ACLMessage msg = new ACLMessage(M_RequestAgents.performative);
-		msg.addReceiver(currentAirport.getAID());
-		msg.setProtocol(M_RequestAgents.protocol);
-		msg.setReplyWith(requestAgentsMsg.getReplyWith());
-		try {
-			msg.setContentObject(requestAgentsMsg);
-		} catch (IOException e) {
-			e.printStackTrace();
-			return null;
-		}
-		send(msg);
-		return requestAgentsMsg.getReplyWith();
-	}
-	
-	
 	private void sendOkMessage() {
-		String replyWith = requestAgents(0);
-		HashSet<AID> lowerAgents = getAgents(replyWith);
-		if (lowerAgents.size() > 0) {
+		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
+		if (lowerPriorityAgents != null && lowerPriorityAgents.size() > 0) {
 			//Logger.printMsg(getAID(), "Sending ok " + value + " to " + lowerAgents.size() + " agents");
 			ACLMessage aclOkMessage = new ACLMessage(M_Ok.perfomative);
 			try {
@@ -131,13 +100,10 @@ public class AirplaneAgent extends Agent {
 				return;
 			}
 			
-			
-		
-			if (lowerAgents != null) {
-				for (AID aid : lowerAgents) {
-					aclOkMessage.addReceiver(aid);
-				}
+			for (AID aid : lowerPriorityAgents.values()) {
+				aclOkMessage.addReceiver(aid);
 			}
+			
 			send(aclOkMessage);
 		}
 		
@@ -188,15 +154,14 @@ public class AirplaneAgent extends Agent {
 	
 	private void backtrack() {
 		// current agent view is a nogood
+		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
 		if (agentView.size() == 0) { // agentView.size == 0 means that I am the agent with most priority
 			// TERMINATE, Broadcast stop message
 			Logger.printMsg(getAID(), "No solution found");
-			String replyWith = requestAgents(0);
-			HashSet<AID> lowerPriorityAgents = getAgents(replyWith);
 			ACLMessage aclStopMsg = new ACLMessage(M_Stop.performative);
 			aclStopMsg.setProtocol(M_Stop.protocol);
 			Logger.printMsg(getAID(), "sending stop to " + lowerPriorityAgents.size() + " agents");
-			for(AID agent : lowerPriorityAgents) {
+			for(AID agent : lowerPriorityAgents.values()) {
 				aclStopMsg.addReceiver(agent);
 			}
 			send(aclStopMsg);
@@ -204,19 +169,11 @@ public class AirplaneAgent extends Agent {
 			return;
 		}
 		// Send nogood upwards
-		// Check if last Entry is equal to parent
+		// Check if last Entry is equal to parent (Not doing now because I dont have access to my parent)
+		// anyway, we should check if we already sent that nogood upwards, as we dont want to duplicate nogoods.
 		AID receiver = agentView.lastEntry().getValue().getAID();
-		String replyWith = requestAgents(-1);
-		HashSet<AID> agents = getAgents(replyWith); // contains only this agent parent
-		AID myParent = agents.iterator().next();
-		
-		
+				
 		currentDomain.addAll(originalDomain); //when sending a nogood, reset currentDomain
-		if (myParent.compareTo(receiver) != 0) {
-			// remove value of lower priority agent from agentview
-			agentView.remove(agentView.lastKey());
-			return; // no need to send nogood, am I am not the child of the lower priority agent of my agent view
-		}
 		
 		// Prepare nogood Message
 		M_Nogood nogoodMsg = new M_Nogood();
@@ -249,10 +206,9 @@ public class AirplaneAgent extends Agent {
 	 * @return True if reset was send to child, false if there was no child
 	 */
 	private boolean sendResetToChild() {
-		String replyWith = requestAgents(1);
-		HashSet<AID> lowerPriorityAgents = getAgents(replyWith);
-		if (lowerPriorityAgents != null) {
-			AID child = lowerPriorityAgents.iterator().next(); // there's only 1
+		Entry<Integer, AID> childEntry = agentsInAirport.ceilingEntry(id + 1);
+		if (childEntry != null) {
+			AID child = childEntry.getValue();
 			if (child != null) {
 				ACLMessage msg = new ACLMessage(M_Reset.performative);
 				msg.setProtocol(M_Reset.protocol);
@@ -270,22 +226,27 @@ public class AirplaneAgent extends Agent {
 		// this is an optimization to prevent unnecessary messages
 		Logger.printMsg(getAID(), "Received nogood");
 		boolean isConsistent = true;
-		HashMap<Integer, AgentViewValue> nogoods = nogoodMsg.getNogoods();
-		for (Map.Entry<Integer, AgentViewValue> nogood : nogoods.entrySet()) {
-			if (nogood.getKey() != id) {
-				AgentViewValue avv = agentView.get(nogood.getKey());
+		HashSet<Nogood> nogoods = nogoodMsg.getNogoods();
+		AgentViewValue myNogood = null;
+		for (Nogood nogood : nogoods) {
+			if (nogood.getAgentId() != id) {
+				AgentViewValue avv = agentView.get(nogood.getAgentId());
 				if (avv == null || !avv.getValue().equals(nogood.getValue().getValue())) {
 					isConsistent = false;
-					break;
 				}
+			} else {
+				myNogood = nogood.getValue();
 			}
+		}
+		if (myNogood == null) {
+			isConsistent = false;
 		}
 		if (isConsistent) {
 			Logger.printMsg(getAID(), "nogood consistent with agent view");
 			// set my value to null
 			value = null;
 			// update currentDomain
-			AgentViewValue myNogood = nogoods.get(id);
+			
 			currentDomain.remove(myNogood.getValue());
 			// try to get new value
 			tryToGetNewValue();
@@ -430,7 +391,7 @@ public class AirplaneAgent extends Agent {
 		boolean done = false;
 		@Override
 		public void action() {
-			int domainSize = 5;
+			int domainSize = 2;
 			// initialize domains
 			for (int i = 0; i < domainSize; i++) {
 				originalDomain.add(i);
@@ -450,21 +411,73 @@ public class AirplaneAgent extends Agent {
 	class ConnectToAirportBehaviour extends Behaviour {
 
 		boolean done = false;
+		int state = 0;
+		MessageTemplate mtAgents = MessageTemplate.MatchPerformative(M_Agents.performative);
+
 		@Override
 		public void action() {
-			Logger.printMsg(getAID(), "Starting Connect Protocol");
-			M_Connect connectMsg = new M_Connect(id, getAID());
-			ACLMessage aclMsg = new ACLMessage(M_Connect.performative);
-			aclMsg.setProtocol(M_Connect.protocol);
-			try {
-				aclMsg.setContentObject(connectMsg);
-			} catch (IOException e) {
-				e.printStackTrace();
-				return;
-			}
-			aclMsg.addReceiver(currentAirport.getAID());
-			send(aclMsg);
-			done = true;
+			switch (state) {
+			case 0:
+				// Request airplanes to airport
+				Logger.printMsg(getAID(), "Starting Connect Protocol");
+				M_RequestAgents requestAgentsMsg = new M_RequestAgents(id);
+				String replyWith = requestAgentsMsg.getReplyWith();
+				ACLMessage requestAgentsACL = new ACLMessage(M_RequestAgents.performative);
+				requestAgentsACL.setProtocol(M_RequestAgents.protocol);
+				try {
+					requestAgentsACL.setContentObject(requestAgentsMsg);
+				} catch (IOException e1) {
+					e1.printStackTrace();
+					return;
+				}
+				requestAgentsACL.setReplyWith(replyWith);
+				requestAgentsACL.addReceiver(currentAirport.getAID());
+				send(requestAgentsACL);
+				
+				state = 1;
+				break;
+			case 1:
+				// Get airplanes in airport
+				
+				ACLMessage agentsACLMsg = receive(mtAgents);
+				if (agentsACLMsg != null) {
+					M_Agents agentsMsg;
+					Logger.printMsg(getAID(), "Received agents in airport");
+					try {
+						agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
+						agentsInAirport.putAll(agentsMsg.getAgents());
+					} catch (UnreadableException e) {
+						e.printStackTrace();
+						return;
+					}
+					state = 2;
+				} else {
+					block();
+				}
+					break;
+				case 2:
+					// Connect to other airplanes
+					M_Connect connectObject = new M_Connect(id);
+					ACLMessage connectACL = new ACLMessage(M_Connect.performative);
+					connectACL.setProtocol(M_Connect.protocol);
+					try {
+						connectACL.setContentObject(connectObject);
+					} catch (IOException e) {
+						e.printStackTrace();
+						return;
+					}
+					agentsInAirport.forEach( (k,aid) -> {					
+						connectACL.addReceiver(aid);
+					});
+					send(connectACL);
+					Logger.printMsg(getAID(), "Sent connect to " + agentsInAirport.size() + " airplanes");
+					done = true;
+					state++;
+					break;
+				default:
+					return;
+			}		
+			
 		}
 
 		@Override
@@ -472,6 +485,27 @@ public class AirplaneAgent extends Agent {
 			return done;
 		}
 		
+	}
+	
+	public class ConnectListeningBehaviour extends CyclicBehaviour{
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_Connect.performative),
+				MessageTemplate.MatchProtocol(M_Connect.protocol));
+		@Override
+		public void action() {
+			ACLMessage msg = receive(mt);
+			if(msg != null) {
+				try {
+					M_Connect connectMsg = (M_Connect) msg.getContentObject();
+					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
+					Logger.printMsg(getAID(), "Received connect from " + msg.getSender().getLocalName());
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+				}
+			} else {
+				block();
+			}
+		}
 	}
 	
 	

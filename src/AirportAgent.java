@@ -26,18 +26,13 @@ import utils.Logger;
 public class AirportAgent extends Agent {
 
 	private Coordinates coordinates;
-	// for each agentId, saves it's AID
-	private TreeMap<Integer, AID> connectedAirplanes;
-	private HashMap<Integer,AID> airplanesConnecting;
-	private boolean reseting = false; // true if airport is in the middle of a reset protocol
+	private TreeMap<Integer, AID> connectedAirplanes; // for each agentId, saves it's AID
 	
 	public AirportAgent(long l, long m){
 		this.coordinates = new Coordinates(l,m);
 		connectedAirplanes = new TreeMap<Integer,AID>();
-		airplanesConnecting = new HashMap<Integer,AID>();
 	}
 	public void setup() {
-		 addBehaviour(new ConnectListeningBehaviour());
 		 addBehaviour(new RequestAgentsListeningBehaviour());
 	}
 	public void takeDown() {
@@ -47,56 +42,45 @@ public class AirportAgent extends Agent {
 	public Coordinates getCoordinates() {
 		return this.coordinates;
 	}
-	public void addAirplaneAgent(M_Connect connectMsg) {
-		connectedAirplanes.put(connectMsg.getAgentId(), connectMsg.getAgentAID());
-	}
-	public void removeAirplaneAgent(M_Disconnect msg) {
-		connectedAirplanes.remove(msg.getAgentId());
-	}
-	
-	
-	private AID getPreviousAgent(int id) {
-		Integer nextId = connectedAirplanes.lowerKey(id);
-		if (nextId == null) return null;
-		return connectedAirplanes.get(nextId);
-	}
-	
-	/**
-	 * Obtains agent which has lower priority than id
-	 * @param id
-	 * @return AID of agent with lower priority than id
-	 */
-	private AID getNextAgent(int id) {
-		Integer nextId = connectedAirplanes.higherKey(id);
-		if (nextId == null) return null;
-		return connectedAirplanes.get(nextId);
-	}
-	
-	private HashSet<AID> getLowerPriorityAgents(int id) {
-		HashSet<AID> a = new HashSet<AID>();
-		connectedAirplanes.tailMap(id+1).forEach((k,aid) -> {
-			a.add(aid);
-		});
-		return a;
-	}
-	public AID getLowerPriorityAirplane() {
-		return connectedAirplanes.lastEntry().getValue();
-	}
-	
-	private void parseConnectMessage(M_Connect msg) {
-		airplanesConnecting.put(msg.getAgentId(), msg.getAgentAID());
-		Logger.printMsg(getAID(), "Airplane " + msg.getAgentId() + " is trying to connect");
-		if (!reseting) {
-			reseting = true;
-			addBehaviour(new InitiateResetProtocol());
-		}
-	}
 	
 	private void processResetDone() {
-		connectedAirplanes.putAll(airplanesConnecting);
-		airplanesConnecting.clear();
-		reseting = false;
 		sendStartMessage();
+	}
+	
+	public class RequestAgentsListeningBehaviour extends CyclicBehaviour{
+
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_RequestAgents.performative),
+				MessageTemplate.MatchProtocol(M_RequestAgents.protocol));
+		@Override
+		public void action() {
+			ACLMessage aclMessage = receive(mt);
+			if (aclMessage != null) {
+				//Logger.printMsg(getAID(), "Received request for agents");
+				M_RequestAgents requestMsg;
+				try {
+					requestMsg = (M_RequestAgents) aclMessage.getContentObject();
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+					return;
+				}
+				ACLMessage reply = aclMessage.createReply();
+				reply.setPerformative(M_Agents.performative);
+				M_Agents agentsContent = new M_Agents(connectedAirplanes);
+				try {
+					reply.setContentObject(agentsContent);
+				} catch (IOException e) {
+					e.printStackTrace();
+					return;
+				}
+				send(reply);
+				connectedAirplanes.put(requestMsg.getAgentId(), aclMessage.getSender());
+				Logger.printMsg(getAID(), "Sent reply to request for agents");
+				
+			} else {
+				block();
+			}
+		}
 	}
 	
 	public class InitiateResetProtocol extends Behaviour {
@@ -155,82 +139,6 @@ public class AirportAgent extends Agent {
 			send(aclMessage);
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
-	}
-	
-	public class ConnectListeningBehaviour extends CyclicBehaviour{
-		MessageTemplate mt = MessageTemplate.and(
-				MessageTemplate.MatchPerformative(M_Connect.performative),
-				MessageTemplate.MatchProtocol(M_Connect.protocol));
-		@Override
-		public void action() {
-			ACLMessage msg = receive(mt);
-			if(msg != null) {
-				try {
-					M_Connect connectMsg = (M_Connect) msg.getContentObject();
-					parseConnectMessage(connectMsg);
-				} catch (UnreadableException e) {
-					e.printStackTrace();
-				}
-			}
-			
-		}	
-	}
-	
-	private HashSet<AID> processRequestAgentsMsg(M_RequestAgents requestAgentsMsg){
-		Integer requesterId = requestAgentsMsg.getAgentId();
-		Integer nAgentsRequested = requestAgentsMsg.getNAgentsToGet();
-		HashSet<AID> agentsToSend = new HashSet<AID>();
-		switch(nAgentsRequested) {
-		case 0:
-			agentsToSend = getLowerPriorityAgents(requesterId);
-			break;
-		case 1:
-			agentsToSend.add(getNextAgent(requesterId));
-			break;
-		case -1:
-			agentsToSend.add(getPreviousAgent(requesterId));
-			break;
-		default:
-			Logger.printErrMsg(getAID(), "Unexpected no. agents requested");
-			break;
-		}
-		return agentsToSend;
-	}
-	
-	public class RequestAgentsListeningBehaviour extends CyclicBehaviour{
-
-		MessageTemplate mt = MessageTemplate.and(
-				MessageTemplate.MatchPerformative(M_RequestAgents.performative),
-				MessageTemplate.MatchProtocol(M_RequestAgents.protocol));
-		@Override
-		public void action() {
-			ACLMessage aclMessage = receive(mt);
-			if (aclMessage != null) {
-				//Logger.printMsg(getAID(), "Received request for agents");
-				M_RequestAgents requestAgentsMsg;
-				try {
-					requestAgentsMsg = (M_RequestAgents) aclMessage.getContentObject();
-				} catch (UnreadableException e) {
-					e.printStackTrace();
-					return;
-				}
-				HashSet<AID> agentsToSend = processRequestAgentsMsg(requestAgentsMsg);
-				ACLMessage reply = aclMessage.createReply();
-				reply.setPerformative(M_Agents.performative);
-				M_Agents agentsContent = new M_Agents(agentsToSend);
-				try {
-					reply.setContentObject(agentsContent);
-				} catch (IOException e) {
-					e.printStackTrace();
-					return;
-				}
-				send(reply);
-				//Logger.printMsg(getAID(), "Sent reply to request for agents");
-				
-			} else {
-				block();
-			}
 		}
 	}
 }

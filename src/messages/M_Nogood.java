@@ -2,6 +2,7 @@ package messages;
 
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import jade.lang.acl.ACLMessage;
 import utils.AgentViewValue;
@@ -12,22 +13,24 @@ public class M_Nogood implements Serializable {
 	
 	private static final long serialVersionUID = -7178093960057801334L;
 	// maps agentIds to values
-	private HashMap<Integer, AgentViewValue> nogoods;
+	private HashSet<Nogood> nogoods;
 	public static int performative = ACLMessage.REJECT_PROPOSAL;
 	public static String protocol = "P_NOGOOD";
 	
 	public M_Nogood() {
-		nogoods = new HashMap<Integer, AgentViewValue>();
+		nogoods = new HashSet<Nogood>();
 	}
 	
 	public void addNogood(Nogood nogood) {
-		nogoods.put(nogood.getAgentId(), nogood.getValue());
+		nogoods.add(nogood);
 	}
-	public HashMap<Integer,AgentViewValue> getNogoods(){
+	public HashSet<Nogood> getNogoods(){
 		return nogoods;
 	}
 	public void removeNogood(Integer agentId) {
-		nogoods.remove(agentId);
+		nogoods.removeIf(n -> {
+			return n.getAgentId() == agentId;
+		});
 	}
 
 }

@@ -18,17 +18,12 @@ public class M_Connect implements Serializable {
 	public static int performative = ACLMessage.REQUEST;
 	public static String protocol = "P_CONNECT";
 	
-	public M_Connect(int agentId, AID agentAID) {
+	public M_Connect(int agentId) {
 		this.agentId = agentId;
-		this.agentAID = agentAID;
 	}
 	
 	public int getAgentId() {
 		return agentId;
-	}
-	
-	public AID getAgentAID() {
-		return agentAID;
 	}
 
 }
