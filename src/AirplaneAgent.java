@@ -27,7 +27,6 @@ public class AirplaneAgent extends Agent {
 	
 	private int id;
 	private TreeMap<Integer, AgentViewValue> agentView; //the state of the world recognized by this agent
-	private ArrayList<HashSet<Nogood>> nogoodStore; // use to check for duplicated nogoods
 	private ArrayList<AirportAgent> airports;
 	private AirportAgent currentAirport;
 	private TreeMap<Integer,AID> agentsInAirport;
@@ -47,8 +46,6 @@ public class AirplaneAgent extends Agent {
 		currentDomain = new TreeSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
-		nogoodStore = new ArrayList<HashSet<Nogood>>();
-		
 	}
 	
 	private void resetState() {
@@ -141,15 +138,7 @@ public class AirplaneAgent extends Agent {
 	
 	public void parseOkMessage(M_Ok okMessage, AID sender) {
 		AgentViewValue avv = new AgentViewValue(okMessage.getValue(), sender);
-		for (Map.Entry<Integer, AgentViewValue> viewEntry : agentView.entrySet()) {
-			//Logger.printMsg(getAID(), "Entry: " + viewEntry.getKey() + "-" + viewEntry.getValue().getValue());
-			if (viewEntry.getValue().equals(avv)) {
-				if (viewEntry.getKey() < okMessage.getAgentId()) {
-					// Optimization. When this is true, the last ok message received is deprecated.
-					return;
-				}
-			}
-		}
+
 		// check if new value is compatible with other agent values in the agentview
 		AgentViewValue prevValue = agentView.put(okMessage.getAgentId(), avv);
 		if (prevValue != null) {
@@ -192,22 +181,26 @@ public class AirplaneAgent extends Agent {
 			takeDown();
 			return;
 		}
-		// Send nogood upwards
-		// Check if last Entry is equal to parent (Not doing now because I dont have access to my parent)
-		// anyway, we should check if we already sent that nogood upwards, as we dont want to duplicate nogoods.
+		// Check if last Entry is equal to parent. If it is not, then there's no need to send the nogood
 		AID receiver = agentView.lastEntry().getValue().getAID();
+		
+		Entry<Integer,AID> parentEntry = agentsInAirport.floorEntry(id - 1);
+		if (parentEntry != null) {
+			if (!receiver.equals(parentEntry.getValue())) {
+				return;
+			}
+		}
 				
 		currentDomain.addAll(originalDomain); //when sending a nogood, reset currentDomain
 		
 		// Prepare nogood Message
 		M_Nogood nogoodMsg = new M_Nogood();
 		agentView.forEach((agentId,agentValue) -> {
-			if (agentId == null) {
-				Logger.printErrMsg(getAID(), "Adding null agent to nogood message");
-			}
 			Nogood nogood = new Nogood(agentId,agentValue);	
 			nogoodMsg.addNogood(nogood);
 		});
+		
+		
 		// remove value of lower priority agent from agentview
 		agentView.remove(agentView.lastKey());
 		
@@ -222,7 +215,8 @@ public class AirplaneAgent extends Agent {
 		}
 		nogoodACLMsg.addReceiver(receiver);
 		send(nogoodACLMsg);
-		Logger.printMsg(getAID(), "Sent nogood to " + receiver.getLocalName());
+		
+		//Logger.printMsg(getAID(), "Sent nogood to " + receiver.getLocalName());
 	}
 
 	/**
@@ -261,9 +255,6 @@ public class AirplaneAgent extends Agent {
 			} else {
 				myNogood = nogood.getValue();
 			}
-		}
-		if (myNogood == null) {
-			isConsistent = false;
 		}
 		if (isConsistent) {
 			Logger.printMsg(getAID(), "nogood consistent with agent view");
@@ -415,7 +406,7 @@ public class AirplaneAgent extends Agent {
 		boolean done = false;
 		@Override
 		public void action() {
-			int domainSize = 2;
+			int domainSize = 7;
 			// initialize domains
 			for (int i = 0; i < domainSize; i++) {
 				originalDomain.add(i);
