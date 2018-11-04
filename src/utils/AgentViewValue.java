@@ -23,7 +23,7 @@ public class AgentViewValue implements Serializable {
 	
 	@Override
 	public boolean equals(Object o) {
-		if (o == null) return false;
+		if (this == null || o == null) return false;
 		if (o instanceof AgentViewValue) {
 			AgentViewValue avv = (AgentViewValue) o;
 			return this.value.equals(avv.value);

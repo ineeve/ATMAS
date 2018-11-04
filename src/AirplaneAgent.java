@@ -1,10 +1,12 @@
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.Map.Entry;
@@ -58,13 +60,14 @@ public class AirplaneAgent extends Agent {
 	public void setup() {
 		okListeningBehaviour = new OkListeningBehaviour();
 		nogoodListeningBehaviour = new NogoodListeningBehaviour();
+		addBehaviour(new SetDomainBehaviour());
 		addBehaviour(new ConnectToAirportBehaviour());
 		addBehaviour(new ConnectListeningBehaviour());
-		addBehaviour(new SetDomainBehaviour());
+		
 		addBehaviour(okListeningBehaviour);
 		addBehaviour(nogoodListeningBehaviour);
-		addBehaviour(new ResetBehaviour());
-		addBehaviour(new StartBehaviour());
+		//addBehaviour(new ResetBehaviour());
+		//addBehaviour(new StartBehaviour());
 		addBehaviour(new StopBehaviour());
 	}
 	public void takeDown() {
@@ -77,7 +80,9 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	private TreeMap<Integer,AID> getLowerPriorityAgents() {
-		return (TreeMap<Integer, AID>) agentsInAirport.tailMap(id+1);
+		TreeMap<Integer,AID> t = new TreeMap<Integer,AID>();
+		t.putAll(agentsInAirport.tailMap(id+1));
+		return t;
 	}
 	
 	private boolean chooseNewValue() {
@@ -87,6 +92,9 @@ public class AirplaneAgent extends Agent {
 		return true;
 	}
 	
+	/**
+	 * Send ok message to all lower priority agents
+	 */
 	private void sendOkMessage() {
 		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
 		if (lowerPriorityAgents != null && lowerPriorityAgents.size() > 0) {
@@ -102,12 +110,27 @@ public class AirplaneAgent extends Agent {
 			
 			for (AID aid : lowerPriorityAgents.values()) {
 				aclOkMessage.addReceiver(aid);
-			}
-			
+			}			
 			send(aclOkMessage);
 		}
-		
 	}
+	/**
+	 * Send ok message to a specific agent
+	 * @param agentAID AID of agent to which the message should be sent
+	 */
+	private void sendOkMessage(AID agentAID) {
+		ACLMessage aclOkMessage = new ACLMessage(M_Ok.perfomative);
+		try {
+			aclOkMessage.setProtocol(M_Ok.protocol);
+			aclOkMessage.setContentObject(new M_Ok(id, value));
+		} catch (IOException e) {
+			Logger.printErrMsg(getAID(), e.getMessage());
+			return;
+		}
+		aclOkMessage.addReceiver(agentAID);
+		send(aclOkMessage);
+}
+	
 
 	private void sendResetDone(AID higherPriorityAgent) {
 		ACLMessage resetDoneMessage = new ACLMessage(M_ResetDone.performative);
@@ -117,9 +140,9 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	public void parseOkMessage(M_Ok okMessage, AID sender) {
-		
 		AgentViewValue avv = new AgentViewValue(okMessage.getValue(), sender);
 		for (Map.Entry<Integer, AgentViewValue> viewEntry : agentView.entrySet()) {
+			//Logger.printMsg(getAID(), "Entry: " + viewEntry.getKey() + "-" + viewEntry.getValue().getValue());
 			if (viewEntry.getValue().equals(avv)) {
 				if (viewEntry.getKey() < okMessage.getAgentId()) {
 					// Optimization. When this is true, the last ok message received is deprecated.
@@ -135,6 +158,7 @@ public class AirplaneAgent extends Agent {
 			}
 		}
 		// Remove from current domain all values that were defined by agents with bigger or equal priority to the sender of this ok message
+		
 		agentView.headMap(okMessage.getAgentId()+1).values().forEach(v -> {
 			currentDomain.remove(v.getValue());
 		});
@@ -442,7 +466,6 @@ public class AirplaneAgent extends Agent {
 				ACLMessage agentsACLMsg = receive(mtAgents);
 				if (agentsACLMsg != null) {
 					M_Agents agentsMsg;
-					Logger.printMsg(getAID(), "Received agents in airport");
 					try {
 						agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
 						agentsInAirport.putAll(agentsMsg.getAgents());
@@ -470,10 +493,12 @@ public class AirplaneAgent extends Agent {
 						connectACL.addReceiver(aid);
 					});
 					send(connectACL);
-					Logger.printMsg(getAID(), "Sent connect to " + agentsInAirport.size() + " airplanes");
+					state=3;
+					break;
+				case 3:
+					tryToGetNewValue();
 					done = true;
 					state++;
-					break;
 				default:
 					return;
 			}		
@@ -487,7 +512,7 @@ public class AirplaneAgent extends Agent {
 		
 	}
 	
-	public class ConnectListeningBehaviour extends CyclicBehaviour{
+	public class ConnectListeningBehaviour extends CyclicBehaviour {
 		MessageTemplate mt = MessageTemplate.and(
 				MessageTemplate.MatchPerformative(M_Connect.performative),
 				MessageTemplate.MatchProtocol(M_Connect.protocol));
@@ -498,7 +523,12 @@ public class AirplaneAgent extends Agent {
 				try {
 					M_Connect connectMsg = (M_Connect) msg.getContentObject();
 					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
-					Logger.printMsg(getAID(), "Received connect from " + msg.getSender().getLocalName());
+					if (connectMsg.getAgentId() > id) {
+						if (value != null) {
+							sendOkMessage(msg.getSender());
+						}
+						
+					}
 				} catch (UnreadableException e) {
 					e.printStackTrace();
 				}
@@ -507,8 +537,6 @@ public class AirplaneAgent extends Agent {
 			}
 		}
 	}
-	
-	
 
 	
 }
