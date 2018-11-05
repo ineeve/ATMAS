@@ -146,18 +146,16 @@ public class AirplaneAgent extends Agent {
 				currentDomain.add(prevValue.getValue()); //Adds the previous value of the agent to this agent available domain
 			}
 		}
-		// Remove from current domain all values that were defined by agents with bigger or equal priority to the sender of this ok message
 		
-		agentView.headMap(okMessage.getAgentId()+1).values().forEach(v -> {
-			currentDomain.remove(v.getValue());
-		});
-		
-		if (value == null || !currentDomain.contains(value)) {
-			tryToGetNewValue();
-		}
+		tryToGetNewValue();
 	}
 	
 	private void tryToGetNewValue() {
+		// Remove from current domain all values that were defined by agents with bigger or equal priority to the sender of this ok message
+		
+		agentView.values().forEach(v -> {
+			currentDomain.remove(v.getValue());
+		});
 		if (chooseNewValue()) {
 			sendOkMessage(); // send ok to lower priority agents
 		} else {
@@ -215,6 +213,7 @@ public class AirplaneAgent extends Agent {
 		}
 		nogoodACLMsg.addReceiver(receiver);
 		send(nogoodACLMsg);
+		tryToGetNewValue();
 		
 		//Logger.printMsg(getAID(), "Sent nogood to " + receiver.getLocalName());
 	}
@@ -242,33 +241,30 @@ public class AirplaneAgent extends Agent {
 	private void parseNogoodMsg(M_Nogood nogoodMsg) {
 		// check if nogood is consistent with agentview
 		// this is an optimization to prevent unnecessary messages
-		Logger.printMsg(getAID(), "Received nogood");
-		boolean isConsistent = true;
+		//Logger.printMsg(getAID(), "Received nogood");
 		HashSet<Nogood> nogoods = nogoodMsg.getNogoods();
 		AgentViewValue myNogood = null;
 		for (Nogood nogood : nogoods) {
 			if (nogood.getAgentId() != id) {
 				AgentViewValue avv = agentView.get(nogood.getAgentId());
 				if (avv == null || !avv.getValue().equals(nogood.getValue().getValue())) {
-					isConsistent = false;
+					return;
 				}
 			} else {
 				myNogood = nogood.getValue();
 			}
 		}
-		if (isConsistent) {
-			Logger.printMsg(getAID(), "nogood consistent with agent view");
-			// set my value to null
-			value = null;
-			// update currentDomain
-			
-			currentDomain.remove(myNogood.getValue());
-			// try to get new value
-			tryToGetNewValue();
-			// if I am not the most priority Agent, add myNogood again to domain
-		} else {
-			Logger.printErrMsg(getAID(), "nogood not consistent with agent view");
-		}
+		
+		//Logger.printMsg(getAID(), "nogood consistent with agent view");
+		// set my value to null
+		value = null;
+		// update currentDomain
+		
+		currentDomain.remove(myNogood.getValue());
+		// try to get new value
+		tryToGetNewValue();
+		// if I am not the most priority Agent, add myNogood again to domain
+		
 		
 	}
 	
@@ -406,7 +402,7 @@ public class AirplaneAgent extends Agent {
 		boolean done = false;
 		@Override
 		public void action() {
-			int domainSize = 7;
+			int domainSize = 8;
 			// initialize domains
 			for (int i = 0; i < domainSize; i++) {
 				originalDomain.add(i);
