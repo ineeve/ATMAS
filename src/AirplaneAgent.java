@@ -43,7 +43,7 @@ public class AirplaneAgent extends Agent {
 		this.airports = airports;
 		this.currentAirport = origin;
 		originalDomain = new TreeSet<Integer>();
-		currentDomain = new TreeSet<Integer>();
+		currentDomain = new HashSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
 	}
@@ -87,6 +87,12 @@ public class AirplaneAgent extends Agent {
 		value = currentDomain.iterator().next();
 		Logger.printMsg(getAID(), "updated value to " + value);
 		return true;
+	}
+	
+	private void printView() {
+		agentView.forEach((id, value) -> {
+			Logger.printMsg(getAID(), "id: " + id + " ; value: " + value.getValue());
+		});
 	}
 	
 	/**
@@ -138,7 +144,7 @@ public class AirplaneAgent extends Agent {
 	
 	public void parseOkMessage(M_Ok okMessage, AID sender) {
 		AgentViewValue avv = new AgentViewValue(okMessage.getValue(), sender);
-
+		Logger.printMsg(getAID(), "Received ok " + okMessage.getValue() + " from " + sender.getLocalName());
 		// check if new value is compatible with other agent values in the agentview
 		AgentViewValue prevValue = agentView.put(okMessage.getAgentId(), avv);
 		if (prevValue != null) {
@@ -146,7 +152,6 @@ public class AirplaneAgent extends Agent {
 				currentDomain.add(prevValue.getValue()); //Adds the previous value of the agent to this agent available domain
 			}
 		}
-		
 		tryToGetNewValue();
 	}
 	
@@ -156,10 +161,12 @@ public class AirplaneAgent extends Agent {
 		agentView.values().forEach(v -> {
 			currentDomain.remove(v.getValue());
 		});
-		if (chooseNewValue()) {
-			sendOkMessage(); // send ok to lower priority agents
-		} else {
-			backtrack();
+		if (value == null || !currentDomain.contains(value)) {
+			if (chooseNewValue()) {
+				sendOkMessage(); // send ok to lower priority agents
+			} else {
+				backtrack();
+			}
 		}
 	}
 	
@@ -213,8 +220,6 @@ public class AirplaneAgent extends Agent {
 		}
 		nogoodACLMsg.addReceiver(receiver);
 		send(nogoodACLMsg);
-		tryToGetNewValue();
-		
 		//Logger.printMsg(getAID(), "Sent nogood to " + receiver.getLocalName());
 	}
 
@@ -241,25 +246,24 @@ public class AirplaneAgent extends Agent {
 	private void parseNogoodMsg(M_Nogood nogoodMsg) {
 		// check if nogood is consistent with agentview
 		// this is an optimization to prevent unnecessary messages
-		//Logger.printMsg(getAID(), "Received nogood");
+		Logger.printMsg(getAID(), "Received nogood");
 		HashSet<Nogood> nogoods = nogoodMsg.getNogoods();
 		AgentViewValue myNogood = null;
 		for (Nogood nogood : nogoods) {
-			if (nogood.getAgentId() != id) {
-				AgentViewValue avv = agentView.get(nogood.getAgentId());
-				if (avv == null || !avv.getValue().equals(nogood.getValue().getValue())) {
-					return;
-				}
-			} else {
+			if (nogood.getAgentId().equals(id)) {
 				myNogood = nogood.getValue();
 			}
+		}
+		if (!myNogood.getValue().equals(value)) {
+			Logger.printMsg(getAID(), "Ignoring nogood, reason: " + myNogood.getValue() + " " + value);
+			printView();
+			return;
 		}
 		
 		//Logger.printMsg(getAID(), "nogood consistent with agent view");
 		// set my value to null
 		value = null;
 		// update currentDomain
-		
 		currentDomain.remove(myNogood.getValue());
 		// try to get new value
 		tryToGetNewValue();

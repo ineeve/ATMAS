@@ -29,7 +29,7 @@ public class M_Nogood implements Serializable {
 	}
 	public void removeNogood(Integer agentId) {
 		nogoods.removeIf(n -> {
-			return n.getAgentId() == agentId;
+			return n.getAgentId().equals(agentId);
 		});
 	}
 
