@@ -64,6 +64,7 @@ public class AirplaneAgent extends Agent {
 		value = null;
 	}
 	
+	@Override
 	public void setup() {
 		okListeningBehaviour = new OkListeningBehaviour();
 		nogoodListeningBehaviour = new NogoodListeningBehaviour();
@@ -77,11 +78,14 @@ public class AirplaneAgent extends Agent {
 		//addBehaviour(new StartBehaviour());
 		addBehaviour(new StopBehaviour());
 	}
+	
+	@Override
 	public void takeDown() {
 		 Logger.printErrMsg(getAID(),"takedown");
 		 removeBehaviour(okListeningBehaviour);
 		 removeBehaviour(nogoodListeningBehaviour);
 	}
+	
 	public int getId() {
 		return id;
 	}

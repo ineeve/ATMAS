@@ -42,9 +42,13 @@ public class AirportAgent extends Agent {
 		this.coordinates = new Coordinates(l,m);
 		connectedAirplanes = new TreeMap<Integer,AID>();
 	}
+	
+	@Override
 	public void setup() {
 		 addBehaviour(new RequestAgentsListeningBehaviour());
 	}
+	
+	@Override
 	public void takeDown() {
 		 Logger.printErrMsg(getAID(), "executing takedown");
 	}
