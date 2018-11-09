@@ -28,7 +28,7 @@ import sajas.sim.repasts.RepastSLauncher;
 public class JADELauncher extends RepastSLauncher implements ContextBuilder<Object> {
 
 	private int numAirports = 1;
-	private int numAirplanes = 5;
+	private int numAirplanes = 9;
 	private int grid_size = 50;
 	private ArrayList<AirportAgent> airports = new ArrayList<AirportAgent>();
 	

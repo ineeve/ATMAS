@@ -94,7 +94,11 @@ public class AirplaneAgent extends Agent {
 	
 	private boolean chooseNewValue() {
 		if (currentDomain.size() == 0) return false;
-		value = currentDomain.iterator().next();
+		int randomIndex = (int) (Math.random() * currentDomain.size());
+		do {
+			value = currentDomain.iterator().next();
+			randomIndex--;
+		} while (randomIndex >= 0);
 		Logger.printMsg(getAID(), "updated value to " + value);
 		return true;
 	}
