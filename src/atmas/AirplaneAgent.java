@@ -84,6 +84,10 @@ public class AirplaneAgent extends Agent {
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
+	public Integer getValue() {
+		return value;
+	}
+	
 	private void resetState() {
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		currentDomain.addAll(originalDomain);
@@ -593,6 +597,7 @@ public class AirplaneAgent extends Agent {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
 				try {
+					isABTRunning = true;
 					M_Connect connectMsg = (M_Connect) msg.getContentObject();
 					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
 					if (connectMsg.getAgentId() > id) {
