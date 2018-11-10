@@ -37,6 +37,7 @@ public class AirplaneAgent extends Agent {
 	private ContinuousSpace<Object> space;
 	private Grid<Object> grid;
 	
+	private int originalId;
 	private int id;
 	private TreeMap<Integer, AgentViewValue> agentView; //the state of the world recognized by this agent
 	private ArrayList<AirportWrapper> airports;
@@ -73,6 +74,7 @@ public class AirplaneAgent extends Agent {
 	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportWrapper> airports, AirportWrapper origin, Double emergencyChance) {
 		this.space = space;
 		this.grid = grid;
+		this.originalId = id;
 		this.id = id;
 		this.airports = airports;
 		this.currentAirport = origin;
@@ -98,8 +100,8 @@ public class AirplaneAgent extends Agent {
 	public void setup() {
 		addBehaviour(new OkListeningBehaviour());
 		addBehaviour(new NogoodListeningBehaviour());
-		addBehaviour(new SetDomainBehaviour());
-		addBehaviour(new ConnectToAirportBehaviour());
+		//addBehaviour(new SetDomainBehaviour());
+		//addBehaviour(new ConnectToAirportBehaviour());
 		addBehaviour(new ConnectListeningBehaviour());
 		addBehaviour(new StopBehaviour());
 	}
@@ -126,8 +128,11 @@ public class AirplaneAgent extends Agent {
 	private void activateEmergency() {
 		// find closest airport
 		currentAirport = AirportLocator.getClosest(space, space.getLocation(this), airports);
+		// set emergency priority (random avoids emergency collisions)
+		id = RandomHelper.nextIntFromTo(Integer.MIN_VALUE, -1);
 		// connect to it
 		// TODO: Do not reconnect when it already is the closest.
+		addBehaviour(new SetDomainBehaviour());
 		addBehaviour(new ConnectToAirportBehaviour());
 		
 		// regular scheduled move function will then land it
@@ -138,15 +143,20 @@ public class AirplaneAgent extends Agent {
 		double currentTick = RepastEssentials.GetTickCount();
 		switch (status) {
 		case PARKED: // must schedule and do takeoff
-			if (parkedIdle) {
+			if (parkedIdle) { // pre-algorithm
+				addBehaviour(new SetDomainBehaviour());
 				addBehaviour(new ConnectToAirportBehaviour());
-			} else if (isABTRunning) {
+				parkedIdle = false;
+				isABTRunning = true;
+			} else if (isABTRunning) { // during algorithm
 				return;
-			} else if (currentTick >= value) { // takeoff at picked time
+			} else if (currentTick >= value) { // post-algorithm, takeoff at picked time
 				status = AirplaneStatus.BLIND_FLIGHT;
 				// start algorithm in destiny airport
 				currentAirport = chooseNewDestiny();
+				addBehaviour(new SetDomainBehaviour());
 				addBehaviour(new ConnectToAirportBehaviour());
+				isABTRunning = true;
 			}
 			break;
 		case BLIND_FLIGHT: // must await landing scheduling and start travel
@@ -162,6 +172,7 @@ public class AirplaneAgent extends Agent {
 				if (currentTick >= value) { // land at picked time
 					status = AirplaneStatus.PARKED;
 					parkedIdle = true;
+					id = originalId;
 				}
 			} else {
 				NdPoint myPoint = space.getLocation(this);
@@ -515,7 +526,6 @@ public class AirplaneAgent extends Agent {
 
 		@Override
 		public void action() {
-			parkedIdle = false;
 			switch (state) {
 			case 0:
 				// Request airplanes to airport

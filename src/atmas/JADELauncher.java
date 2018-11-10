@@ -32,8 +32,8 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	// 1 tick = 5 minutes.
 	static final public int TICKS_PER_HOUR = 12;
 	
-	private int numAirports = 2;
-	private int numAirplanes = 5;
+	private int numAirports = 1;
+	private int numAirplanes = 3;
 	private int grid_size = 50;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	
@@ -84,7 +84,9 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 				e.printStackTrace();
 			}
 			context.add(ag);
-			airports.add(new AirportWrapper(ag.getAID(),grid.getLocation(ag)));
+			NdPoint pt = space.getLocation(ag);
+			grid.moveTo(ag, (int) pt.getX(), (int) pt.getY());
+			airports.add(new AirportWrapper(ag.getAID(), grid.getLocation(ag)));
 		}
 		// startup plane agents
 		for (int i = 0; i < numAirplanes; i++) {
@@ -97,24 +99,12 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 				e.printStackTrace();
 			}
 			context.add(airplane);
+			NdPoint pt = space.getLocation(airplane);
+			grid.moveTo(airplane, (int) pt.getX(), (int) pt.getY());
 			// TODO: Move to origin airports once travel is implemented.
 //			space.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));
 //			grid.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));
 		}
-		
-		for (Object obj : context) {
-			NdPoint pt = space.getLocation(obj);
-			grid.moveTo(obj, (int) pt.getX(), (int) pt.getY());
-		}
-		
-		// RMA is incompatible out-the-box with SaJaS.
-//		AgentController ac3;
-//		try {
-//			ac3 = mainContainer.acceptNewAgent("myRMA", new jade.tools.rma.rma());
-//			ac3.start();
-//		} catch (StaleProxyException e) {
-//			e.printStackTrace();
-//		}
 	}
 
 }
