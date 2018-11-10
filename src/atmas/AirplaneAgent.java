@@ -47,6 +47,7 @@ public class AirplaneAgent extends Agent {
 	private TreeSet<Integer> originalDomain;
 	private TreeSet<Integer> currentDomain;
 	
+	private double endTick;
 	private boolean isABTRunning = false;
 	
 	// Grid units / tick.
@@ -313,6 +314,13 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
 			if (aclMsg != null) {
+				try {
+					M_ABTEnd ABTEndMsg = (M_ABTEnd) aclMsg.getContentObject();
+					endTick = ABTEndMsg.getTick();
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+					return;
+				}
 				isABTRunning = false;
 			} else {
 				block();
@@ -328,6 +336,12 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage aclMsg = new ACLMessage(M_ABTEnd.performative);
 			aclMsg.setProtocol(M_ABTEnd.protocol);
+			try {
+				aclMsg.setContentObject(new M_ABTEnd(RepastEssentials.GetTickCount()+5));
+			} catch (IOException e) {
+				e.printStackTrace();
+				return;
+			}
 			for (AID airplaneAID : agentsInAirport.values()) {
 				aclMsg.addReceiver(airplaneAID);
 			}
