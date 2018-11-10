@@ -88,7 +88,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 		for (int i = 0; i < numAirplanes; i++) {
 			int airportIndex = (int)(Math.random()*numAirports);
 			AirportAgent airportSelected = airports.get(airportIndex);
-			AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected);
+			AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected, null);
 			try {
 				mainContainer.acceptNewAgent("airplane"+i, airplane).start();
 			} catch(StaleProxyException e) {

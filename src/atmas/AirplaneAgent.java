@@ -34,6 +34,7 @@ import repast.simphony.space.grid.GridPoint;
 import utils.Logger;
 import utils.AgentViewValue;
 import utils.AirplaneStatus;
+import utils.AirportLocator;
 import utils.Nogood;
 
 public class AirplaneAgent extends Agent {
@@ -62,8 +63,18 @@ public class AirplaneAgent extends Agent {
 	private AirplaneStatus status = AirplaneStatus.PARKED;
 	private boolean parkedIdle = true;
 	
+	private double emergencyChance;
 	
-	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportAgent> airports, AirportAgent origin) {
+	/**
+	 * 
+	 * @param space
+	 * @param grid
+	 * @param id
+	 * @param airports
+	 * @param origin
+	 * @param emergencyChance Null for default emergency value.
+	 */
+	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportAgent> airports, AirportAgent origin, Double emergencyChance) {
 		this.space = space;
 		this.grid = grid;
 		this.id = id;
@@ -73,6 +84,8 @@ public class AirplaneAgent extends Agent {
 		currentDomain = new HashSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
+		
+		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
 	private void resetState() {
@@ -101,6 +114,30 @@ public class AirplaneAgent extends Agent {
 		 Logger.printErrMsg(getAID(),"takedown");
 		 removeBehaviour(okListeningBehaviour);
 		 removeBehaviour(nogoodListeningBehaviour);
+	}
+	
+	/**
+	 * Each simulated hour, there's a chance this in-progress flight gets in an emergency state.
+	 */
+	@ScheduledMethod(start = JADELauncher.TICKS_PER_HOUR, interval = JADELauncher.TICKS_PER_HOUR)
+	public void emergency() {
+		if (status == AirplaneStatus.FLIGHT && RandomHelper.nextDoubleFromTo(0, 1) <= emergencyChance) {
+			activateEmergency();
+		}
+	}
+	
+	/**
+	 * Activate emergency state.
+	 * Airplane will try to land on the closest airport with maximum priority.
+	 */
+	private void activateEmergency() {
+		// find closest airport
+		currentAirport = AirportLocator.getClosest(space, space.getLocation(this));
+		// connect to it
+		// TODO: Do not reconnect when it already is the closest.
+		addBehaviour(new ConnectToAirportBehaviour());
+		
+		// regular scheduled move function will then land it
 	}
 	
 	@ScheduledMethod(start = 1, interval = 1)
