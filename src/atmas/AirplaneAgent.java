@@ -87,6 +87,19 @@ public class AirplaneAgent extends Agent {
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
+	public String getStatus() {
+		switch (status) {
+		case PARKED:
+			return "PARKED";
+		case BLIND_FLIGHT:
+			return "BLIND_FLIGHT";
+		case FLIGHT:
+			return "FLIGHT";
+		default:
+			return "Invalid";
+		}
+	}
+	
 	public Integer getValue() {
 		return value;
 	}
@@ -161,6 +174,7 @@ public class AirplaneAgent extends Agent {
 			}
 			break;
 		case BLIND_FLIGHT: // must await landing scheduling and start travel
+			System.out.println("in blind flight | " + isABTRunning);
 			if (isABTRunning) {
 				return;
 			} else {
