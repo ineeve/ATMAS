@@ -1,6 +1,9 @@
 package utils;
 
+import java.util.ArrayList;
+
 import atmas.AirportAgent;
+import jade.core.AID;
 import repast.simphony.space.continuous.ContinuousSpace;
 import repast.simphony.space.continuous.NdPoint;
 
@@ -12,19 +15,16 @@ public class AirportLocator {
 	 * @param selfPoint
 	 * @return Null when there are no objects in the space.
 	 */
-	public static AirportAgent getClosest(ContinuousSpace<Object> space, NdPoint selfPoint) {
+	public static AirportWrapper getClosest(ContinuousSpace<Object> space, NdPoint selfPoint, ArrayList<AirportWrapper> airports) {
 		//double gridSize = space.getDimensions().getWidth();
-		AirportAgent closest = null;
+		AirportWrapper closest = null;
 		double minDistance = Double.MAX_VALUE;
-		Iterable<Object> objects = space.getObjects();
-		for (final Object obj : objects) {
-			if (obj instanceof AirportAgent) {
-				NdPoint airportPoint = space.getLocation(obj);
-				double currDistance = space.getDistance(selfPoint, airportPoint);
-				if (currDistance < minDistance) {
-					closest = (AirportAgent) obj;
-					minDistance = currDistance;
-				}
+		for (AirportWrapper airport : airports) {
+			NdPoint airportPoint = new NdPoint(airport.getGridPoint().getX(),airport.getGridPoint().getY());
+			double currDistance = space.getDistance(selfPoint, airportPoint);
+			if (currDistance < minDistance) {
+				closest = airport;
+				minDistance = currDistance;
 			}
 		}
 		return closest;
