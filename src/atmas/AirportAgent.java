@@ -22,8 +22,11 @@ import messages.M_Disconnect;
 import messages.M_RequestAgents;
 import messages.M_Reset;
 import messages.M_Start;
+import repast.simphony.space.SpatialMath;
 import repast.simphony.space.continuous.ContinuousSpace;
+import repast.simphony.space.continuous.NdPoint;
 import repast.simphony.space.grid.Grid;
+import repast.simphony.space.grid.GridPoint;
 import utils.Coordinates;
 import utils.Logger;
 
@@ -53,8 +56,12 @@ public class AirportAgent extends Agent {
 		 Logger.printErrMsg(getAID(), "executing takedown");
 	}
 	
-	public Coordinates getCoordinates() {
-		return this.coordinates;
+//	public Coordinates getCoordinates() {
+//		return this.coordinates;
+//	}
+	
+	public GridPoint getGridLocation() {
+		return grid.getLocation(this);
 	}
 	
 	private void processResetDone() {

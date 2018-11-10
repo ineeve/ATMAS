@@ -23,10 +23,17 @@ import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
 import messages.*;
+import repast.simphony.engine.schedule.ScheduledMethod;
+import repast.simphony.essentials.RepastEssentials;
+import repast.simphony.random.RandomHelper;
+import repast.simphony.space.SpatialMath;
 import repast.simphony.space.continuous.ContinuousSpace;
+import repast.simphony.space.continuous.NdPoint;
 import repast.simphony.space.grid.Grid;
+import repast.simphony.space.grid.GridPoint;
 import utils.Logger;
 import utils.AgentViewValue;
+import utils.AirplaneStatus;
 import utils.Nogood;
 
 public class AirplaneAgent extends Agent {
@@ -44,6 +51,14 @@ public class AirplaneAgent extends Agent {
 	private Set<Integer> currentDomain;
 	private Behaviour okListeningBehaviour;
 	private Behaviour nogoodListeningBehaviour;
+	
+	// Grid units / tick.
+	private int minSpeed = 20 / JADELauncher.TICKS_PER_HOUR;
+	private int maxSpeed = 50 / JADELauncher.TICKS_PER_HOUR;
+	private int realSpeed = minSpeed;
+	
+	private AirplaneStatus status = AirplaneStatus.PARKED;
+	private boolean parkedIdle = true;
 	
 	
 	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportAgent> airports, AirportAgent origin) {
@@ -86,6 +101,47 @@ public class AirplaneAgent extends Agent {
 		 removeBehaviour(nogoodListeningBehaviour);
 	}
 	
+	@ScheduledMethod(start = 1, interval = 1)
+	public void moveTowardsAirport() {
+		double currentTick = RepastEssentials.GetTickCount();
+		switch (status) {
+		case PARKED: // must schedule and do takeoff
+			if (parkedIdle) {
+				addBehaviour(new ConnectToAirportBehaviour());
+			} else if (isABTRunning) {
+				return;
+			} else if (currentTick >= value) {
+				status = AirplaneStatus.BLIND_FLIGHT;
+				// start algorithm in destiny airport
+			}
+			return;
+		case BLIND_FLIGHT: // must await landing scheduling and start travel
+			if (isABTRunning) {
+				return;
+			} else {
+				status = AirplaneStatus.FLIGHT;
+			}
+			return;
+		case FLIGHT: // must travel to and land in airport
+			GridPoint pt = currentAirport.getGridLocation();
+			if (pt.equals(grid.getLocation(this))) {
+				if (currentTick >= value) {
+					status = AirplaneStatus.PARKED;
+					parkedIdle = true;
+				}
+			} else {
+				NdPoint myPoint = space.getLocation(this);
+				NdPoint otherPoint = new NdPoint(pt.getX(), pt.getY());
+				double angle = SpatialMath.calcAngleFor2DMovement(space, myPoint, otherPoint);
+				double speed = Math.min(realSpeed, space.getDistance(myPoint, otherPoint)); // do not overshoot
+				space.moveByVector(this, speed, angle, 0);
+				myPoint = space.getLocation(this);
+				grid.moveTo(this, (int) myPoint.getX(), (int) myPoint.getY());
+			}
+			return;
+		}
+	}
+
 	public int getId() {
 		return id;
 	}
@@ -150,7 +206,7 @@ public class AirplaneAgent extends Agent {
 		}
 		aclOkMessage.addReceiver(agentAID);
 		send(aclOkMessage);
-}
+	}
 	
 
 	private void sendResetDone(AID higherPriorityAgent) {
