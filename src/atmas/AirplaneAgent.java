@@ -112,22 +112,24 @@ public class AirplaneAgent extends Agent {
 				addBehaviour(new ConnectToAirportBehaviour());
 			} else if (isABTRunning) {
 				return;
-			} else if (currentTick >= value) {
+			} else if (currentTick >= value) { // takeoff at picked time
 				status = AirplaneStatus.BLIND_FLIGHT;
 				// start algorithm in destiny airport
+				currentAirport = chooseNewDestiny();
+				addBehaviour(new ConnectToAirportBehaviour());
 			}
-			return;
+			break;
 		case BLIND_FLIGHT: // must await landing scheduling and start travel
 			if (isABTRunning) {
 				return;
 			} else {
 				status = AirplaneStatus.FLIGHT;
 			}
-			return;
+			break;
 		case FLIGHT: // must travel to and land in airport
 			GridPoint pt = currentAirport.getGridLocation();
 			if (pt.equals(grid.getLocation(this))) {
-				if (currentTick >= value) {
+				if (currentTick >= value) { // land at picked time
 					status = AirplaneStatus.PARKED;
 					parkedIdle = true;
 				}
@@ -140,8 +142,16 @@ public class AirplaneAgent extends Agent {
 				myPoint = space.getLocation(this);
 				grid.moveTo(this, (int) myPoint.getX(), (int) myPoint.getY());
 			}
-			return;
+			break;
 		}
+	}
+
+	private AirportAgent chooseNewDestiny() {
+		int airportIndex;
+		do {
+			airportIndex = RandomHelper.nextIntFromTo(0, airports.size() - 1);
+		} while (currentAirport.equals(airports.get(airportIndex))); // do not travel to same airport
+		return airports.get(airportIndex);
 	}
 
 	public int getId() {
@@ -507,6 +517,7 @@ public class AirplaneAgent extends Agent {
 
 		@Override
 		public void action() {
+			parkedIdle = false;
 			switch (state) {
 			case 0:
 				// Request airplanes to airport

@@ -27,7 +27,6 @@ import repast.simphony.space.continuous.ContinuousSpace;
 import repast.simphony.space.continuous.NdPoint;
 import repast.simphony.space.grid.Grid;
 import repast.simphony.space.grid.GridPoint;
-import utils.Coordinates;
 import utils.Logger;
 
 public class AirportAgent extends Agent {
@@ -35,14 +34,12 @@ public class AirportAgent extends Agent {
 	private ContinuousSpace<Object> space;
 	private Grid<Object> grid;
 	
-	private Coordinates coordinates;
 	// for each agentId, saves it's AID
 	private TreeMap<Integer, AID> connectedAirplanes;
 	
 	public AirportAgent(ContinuousSpace<Object> space, Grid<Object> grid, long l, long m){
 		this.space = space;
 		this.grid = grid;
-		this.coordinates = new Coordinates(l,m);
 		connectedAirplanes = new TreeMap<Integer,AID>();
 	}
 	
@@ -55,10 +52,6 @@ public class AirportAgent extends Agent {
 	public void takeDown() {
 		 Logger.printErrMsg(getAID(), "executing takedown");
 	}
-	
-//	public Coordinates getCoordinates() {
-//		return this.coordinates;
-//	}
 	
 	public GridPoint getGridLocation() {
 		return grid.getLocation(this);
