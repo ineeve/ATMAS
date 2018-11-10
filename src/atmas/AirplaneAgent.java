@@ -43,8 +43,8 @@ public class AirplaneAgent extends Agent {
 	private AirportWrapper currentAirport;
 	private TreeMap<Integer,AID> agentsInAirport;
 	private Integer value;
-	private Set<Integer> originalDomain;
-	private Set<Integer> currentDomain;
+	private TreeSet<Integer> originalDomain;
+	private TreeSet<Integer> currentDomain;
 	
 	private boolean isABTRunning = false;
 	
@@ -77,7 +77,7 @@ public class AirplaneAgent extends Agent {
 		this.airports = airports;
 		this.currentAirport = origin;
 		originalDomain = new TreeSet<Integer>();
-		currentDomain = new HashSet<Integer>();
+		currentDomain = new TreeSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
 
@@ -167,9 +167,21 @@ public class AirplaneAgent extends Agent {
 				space.moveByVector(this, speed, angle, 0);
 				myPoint = space.getLocation(this);
 				grid.moveTo(this, (int) myPoint.getX(), (int) myPoint.getY());
+				updateDomain();
 			}
 			break;
 		}
+	}
+
+	private void updateDomain() {
+		GridPoint myPoint = grid.getLocation(this);
+		GridPoint otherPoint = currentAirport.getGridPoint();
+		double distance = grid.getDistance(myPoint, otherPoint);
+		int minTick = (int) Math.ceil(distance / maxSpeed);
+		int maxTick = fuelRemaining;
+		
+		originalDomain = (TreeSet<Integer>) originalDomain.subSet(minTick, maxTick);
+		currentDomain = (TreeSet<Integer>) currentDomain.subSet(minTick, maxTick);
 	}
 
 	private AirportWrapper chooseNewDestiny() {
@@ -471,10 +483,9 @@ public class AirplaneAgent extends Agent {
 		boolean done = false;
 		@Override
 		public void action() {
-			NdPoint myPoint = space.getLocation(myAgent);
-			GridPoint otherGP = currentAirport.getGridPoint();
-			NdPoint otherPoint = new NdPoint(otherGP.getX(), otherGP.getY());
-			double distance = space.getDistance(myPoint, otherPoint);
+			GridPoint myPoint = grid.getLocation(myAgent);
+			GridPoint otherPoint = currentAirport.getGridPoint();
+			double distance = grid.getDistance(myPoint, otherPoint);
 			int minTick = (int) Math.ceil(distance / maxSpeed);
 			int maxTick = fuelRemaining;
 			// initialize domains

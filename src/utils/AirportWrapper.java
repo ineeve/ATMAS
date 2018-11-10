@@ -19,4 +19,9 @@ public class AirportWrapper {
 		return gridPoint;
 	}
 	
+	@Override
+	public boolean equals(Object other) {
+		return other != null && aid.equals(((AirportWrapper) other).getAID());
+	}
+	
 }
