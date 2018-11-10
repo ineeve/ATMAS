@@ -1,15 +1,9 @@
 package atmas;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.Map.Entry;
@@ -18,7 +12,7 @@ import jade.core.AID;
 import sajas.core.Agent;
 import sajas.core.behaviours.Behaviour;
 import sajas.core.behaviours.CyclicBehaviour;
-
+import sajas.core.behaviours.OneShotBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
@@ -35,6 +29,7 @@ import utils.Logger;
 import utils.AgentViewValue;
 import utils.AirplaneStatus;
 import utils.AirportLocator;
+import utils.AirportWrapper;
 import utils.Nogood;
 
 public class AirplaneAgent extends Agent {
@@ -44,14 +39,12 @@ public class AirplaneAgent extends Agent {
 	
 	private int id;
 	private TreeMap<Integer, AgentViewValue> agentView; //the state of the world recognized by this agent
-	private ArrayList<AirportAgent> airports;
-	private AirportAgent currentAirport;
+	private ArrayList<AirportWrapper> airports;
+	private AirportWrapper currentAirport;
 	private TreeMap<Integer,AID> agentsInAirport;
 	private Integer value;
 	private Set<Integer> originalDomain;
 	private Set<Integer> currentDomain;
-	private Behaviour okListeningBehaviour;
-	private Behaviour nogoodListeningBehaviour;
 	
 	private boolean isABTRunning = false;
 	
@@ -74,7 +67,7 @@ public class AirplaneAgent extends Agent {
 	 * @param origin
 	 * @param emergencyChance Null for default emergency value.
 	 */
-	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportAgent> airports, AirportAgent origin, Double emergencyChance) {
+	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportWrapper> airports, AirportWrapper origin, Double emergencyChance) {
 		this.space = space;
 		this.grid = grid;
 		this.id = id;
@@ -125,7 +118,7 @@ public class AirplaneAgent extends Agent {
 	 */
 	private void activateEmergency() {
 		// find closest airport
-		currentAirport = AirportLocator.getClosest(space, space.getLocation(this));
+		currentAirport = AirportLocator.getClosest(space, space.getLocation(this), airports);
 		// connect to it
 		// TODO: Do not reconnect when it already is the closest.
 		addBehaviour(new ConnectToAirportBehaviour());
@@ -157,7 +150,7 @@ public class AirplaneAgent extends Agent {
 			}
 			break;
 		case FLIGHT: // must travel to and land in airport
-			GridPoint pt = currentAirport.getGridLocation();
+			GridPoint pt = currentAirport.getGridPoint();
 			if (pt.equals(grid.getLocation(this))) {
 				if (currentTick >= value) { // land at picked time
 					status = AirplaneStatus.PARKED;
@@ -176,7 +169,7 @@ public class AirplaneAgent extends Agent {
 		}
 	}
 
-	private AirportAgent chooseNewDestiny() {
+	private AirportWrapper chooseNewDestiny() {
 		int airportIndex;
 		do {
 			airportIndex = RandomHelper.nextIntFromTo(0, airports.size() - 1);
@@ -248,6 +241,7 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	public void parseOkMessage(M_Ok okMessage, AID sender) {
+		isABTRunning = true;
 		AgentViewValue avv = new AgentViewValue(okMessage.getValue(), sender);
 		Logger.printMsg(getAID(), "Received ok " + okMessage.getValue() + " from " + sender.getLocalName());
 		// check if new value is compatible with other agent values in the agentview
@@ -276,7 +270,40 @@ public class AirplaneAgent extends Agent {
 			}
 		}
 		isABTRunning = false;
+		addBehaviour(new InformABTEnd());
 		Logger.printMsg(getAID(), "ABT ended");
+	}
+	
+	
+	class ListenABTEnd extends CyclicBehaviour {
+		
+		MessageTemplate mt = MessageTemplate.and(MessageTemplate.MatchPerformative(M_ABTEnd.performative), MessageTemplate.MatchProtocol(M_ABTEnd.protocol));
+		
+		@Override
+		public void action() {
+			ACLMessage aclMsg = receive(mt);
+			if (aclMsg != null) {
+				isABTRunning = false;
+			} else {
+				block();
+			}
+			
+		}
+		
+	}
+	
+	class InformABTEnd extends OneShotBehaviour {
+
+		@Override
+		public void action() {
+			ACLMessage aclMsg = new ACLMessage(M_ABTEnd.performative);
+			aclMsg.setProtocol(M_ABTEnd.protocol);
+			for (AID airplaneAID : agentsInAirport.values()) {
+				aclMsg.addReceiver(airplaneAID);
+			}
+			send(aclMsg);	
+		}
+		
 	}
 	
 	private void tryToGetNewValue() {
@@ -348,6 +375,7 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	private void parseNogoodMsg(M_Nogood nogoodMsg) {
+		isABTRunning = true;
 		// check if nogood is consistent with agentview
 		// this is an optimization to prevent unnecessary messages
 		Logger.printMsg(getAID(), "Received nogood");

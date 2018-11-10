@@ -53,10 +53,6 @@ public class AirportAgent extends Agent {
 		 Logger.printErrMsg(getAID(), "executing takedown");
 	}
 	
-	public GridPoint getGridLocation() {
-		return grid.getLocation(this);
-	}
-	
 	private void processResetDone() {
 		sendStartMessage();
 	}

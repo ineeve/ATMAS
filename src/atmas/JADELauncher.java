@@ -2,12 +2,14 @@ package atmas;
 
 import java.util.ArrayList;
 
+import jade.core.AID;
 import sajas.core.Agent;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
 import sajas.core.Runtime;
 import sajas.wrapper.AgentController;
 import sajas.wrapper.ContainerController;
+import utils.AirportWrapper;
 import jade.wrapper.StaleProxyException;
 import repast.simphony.context.Context;
 import repast.simphony.context.space.continuous.ContinuousSpaceFactory;
@@ -33,7 +35,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	private int numAirports = 2;
 	private int numAirplanes = 5;
 	private int grid_size = 50;
-	private ArrayList<AirportAgent> airports = new ArrayList<AirportAgent>();
+	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	
 	private Context<Object> context;
 	private ContinuousSpace<Object> space;
@@ -82,12 +84,12 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 				e.printStackTrace();
 			}
 			context.add(ag);
-			airports.add(ag);
+			airports.add(new AirportWrapper(ag.getAID(),grid.getLocation(ag)));
 		}
 		// startup plane agents
 		for (int i = 0; i < numAirplanes; i++) {
 			int airportIndex = (int)(Math.random()*numAirports);
-			AirportAgent airportSelected = airports.get(airportIndex);
+			AirportWrapper airportSelected = airports.get(airportIndex);
 			AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected, null);
 			try {
 				mainContainer.acceptNewAgent("airplane"+i, airplane).start();
