@@ -106,6 +106,9 @@ public class AirplaneAgent extends Agent {
 	 * Send ok message to all lower priority agents
 	 */
 	private void sendOkMessage() {
+		if (value == null) {
+			chooseNewValue();
+		}
 		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
 		if (lowerPriorityAgents != null && lowerPriorityAgents.size() > 0) {
 			//Logger.printMsg(getAID(), "Sending ok " + value + " to " + lowerAgents.size() + " agents");
@@ -161,13 +164,14 @@ public class AirplaneAgent extends Agent {
 	private void checkABTSuccess() {
 		HashSet<Integer> h = new HashSet<Integer>();
 		if (value == null) return;
+		if (agentView.size() != agentsInAirport.size()) return;
 		h.add(value);
-		agentView.values().forEach(avv -> {
+		for (AgentViewValue avv : agentView.values()) {
 			Integer agentValue = avv.getValue();
 			if (agentValue == null || h.add(agentValue) == false) {
 				return; // ABT has not ended yet
 			}
-		});
+		}
 		isABTRunning = false;
 		Logger.printMsg(getAID(), "ABT ended");
 	}
@@ -333,14 +337,13 @@ public class AirplaneAgent extends Agent {
 		boolean done = false;
 		@Override
 		public void action() {
-			int domainSize = 3;
+			int domainSize = 5;
 			// initialize domains
 			for (int i = 0; i < domainSize; i++) {
 				originalDomain.add(i);
 				currentDomain.add(i);
 			}
 			done = true;
-			
 		}
 
 		@Override
@@ -443,7 +446,7 @@ public class AirplaneAgent extends Agent {
 					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
 					if (connectMsg.getAgentId() > id) {
 						if (value != null) {
-							sendOkMessage(msg.getSender());
+							sendOkMessage();
 						}
 						
 					}
