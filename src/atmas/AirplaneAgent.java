@@ -264,7 +264,7 @@ public class AirplaneAgent extends Agent {
 			
 			for (AID aid : lowerPriorityAgents.values()) {
 				aclOkMessage.addReceiver(aid);
-			}			
+			}
 			send(aclOkMessage);
 		}
 	}
@@ -377,6 +377,9 @@ public class AirplaneAgent extends Agent {
 			} else {
 				backtrack();
 			}
+		}
+		if (agentsInAirport.size() == 0) {
+			isABTRunning = false;
 		}
 	}
 	
