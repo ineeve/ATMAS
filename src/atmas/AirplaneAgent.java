@@ -151,7 +151,7 @@ public class AirplaneAgent extends Agent {
 				isABTRunning = true;
 			} else if (isABTRunning) { // during algorithm
 				return;
-			} else if (currentTick >= value) { // post-algorithm, takeoff at picked time
+			} else if (currentTick >= value + abtEndTick) { // post-algorithm, takeoff at picked time
 				status = AirplaneStatus.BLIND_FLIGHT;
 				// start algorithm in destiny airport
 				currentAirport = chooseNewDestiny();
@@ -170,7 +170,7 @@ public class AirplaneAgent extends Agent {
 		case FLIGHT: // must travel to and land in airport
 			GridPoint pt = currentAirport.getGridPoint();
 			if (pt.equals(grid.getLocation(this))) {
-				if (currentTick >= value) { // land at picked time
+				if (currentTick >= value + abtEndTick) { // land at picked time
 					status = AirplaneStatus.PARKED;
 					parkedIdle = true;
 					id = originalId;
