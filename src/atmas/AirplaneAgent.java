@@ -472,7 +472,8 @@ public class AirplaneAgent extends Agent {
 		@Override
 		public void action() {
 			NdPoint myPoint = space.getLocation(myAgent);
-			NdPoint otherPoint = space.getLocation(((AirplaneAgent) myAgent).currentAirport);
+			GridPoint otherGP = currentAirport.getGridPoint();
+			NdPoint otherPoint = new NdPoint(otherGP.getX(), otherGP.getY());
 			double distance = space.getDistance(myPoint, otherPoint);
 			int minTick = (int) Math.ceil(distance / maxSpeed);
 			int maxTick = fuelRemaining;
