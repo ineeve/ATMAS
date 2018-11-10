@@ -60,6 +60,9 @@ public class AirplaneAgent extends Agent {
 	private int maxSpeed = 50 / JADELauncher.TICKS_PER_HOUR;
 	private int realSpeed = minSpeed;
 	
+	public static final int maxFuelHours = 14;
+	private int fuelRemaining = maxFuelHours * JADELauncher.TICKS_PER_HOUR; // ticks of fuel remaining
+	
 	private AirplaneStatus status = AirplaneStatus.PARKED;
 	private boolean parkedIdle = true;
 	
@@ -183,7 +186,7 @@ public class AirplaneAgent extends Agent {
 		} while (currentAirport.equals(airports.get(airportIndex))); // do not travel to same airport
 		return airports.get(airportIndex);
 	}
-
+	
 	public int getId() {
 		return id;
 	}
@@ -440,9 +443,13 @@ public class AirplaneAgent extends Agent {
 		boolean done = false;
 		@Override
 		public void action() {
-			int domainSize = Integer.MAX_VALUE;
+			NdPoint myPoint = space.getLocation(myAgent);
+			NdPoint otherPoint = space.getLocation(((AirplaneAgent) myAgent).currentAirport);
+			double distance = space.getDistance(myPoint, otherPoint);
+			int minTick = (int) Math.ceil(distance / maxSpeed);
+			int maxTick = fuelRemaining;
 			// initialize domains
-			for (int i = 0; i < domainSize; i++) {
+			for (int i = minTick; i <= maxTick; i++) {
 				originalDomain.add(i);
 				currentDomain.add(i);
 			}
