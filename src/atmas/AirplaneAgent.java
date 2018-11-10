@@ -52,6 +52,8 @@ public class AirplaneAgent extends Agent {
 	private Behaviour okListeningBehaviour;
 	private Behaviour nogoodListeningBehaviour;
 	
+	private boolean isABTRunning = false;
+	
 	// Grid units / tick.
 	private int minSpeed = 20 / JADELauncher.TICKS_PER_HOUR;
 	private int maxSpeed = 50 / JADELauncher.TICKS_PER_HOUR;
