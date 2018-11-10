@@ -127,6 +127,7 @@ public class AirplaneAgent extends Agent {
 		//addBehaviour(new ConnectToAirportBehaviour());
 		addBehaviour(new ConnectListeningBehaviour());
 		addBehaviour(new StopBehaviour());
+		addBehaviour(new ListenABTEnd());
 	}
 	
 	@Override
@@ -224,7 +225,6 @@ public class AirplaneAgent extends Agent {
 		int minTick = deltaTicks + fastestEtaTicks;
 		int maxTick = fuelRemaining + deltaTicks;
 		
-		Logger.printMsg(getAID(), "deltaTicks | new min | new max: " + deltaTicks + " | " + minTick + " | " + maxTick);
 		originalDomain = (TreeSet<Integer>) originalDomain.subSet(minTick, maxTick);
 		currentDomain = (TreeSet<Integer>) currentDomain.subSet(minTick, maxTick);
 	}
@@ -307,7 +307,7 @@ public class AirplaneAgent extends Agent {
 		// check if new value is compatible with other agent values in the agentview
 		AgentViewValue prevValue = agentView.put(okMessage.getAgentId(), avv);
 		if (prevValue != null) {
-			if (!agentView.containsValue(prevValue)) { //there could be another agent which had the previous value
+			if (!agentView.containsValue(prevValue) && originalDomain.contains(prevValue.getValue())) { //there could be another agent which had the previous value
 				currentDomain.add(prevValue.getValue()); //Adds the previous value of the agent to this agent available domain
 			}
 		}
@@ -346,6 +346,7 @@ public class AirplaneAgent extends Agent {
 				try {
 					M_ABTEnd ABTEndMsg = (M_ABTEnd) aclMsg.getContentObject();
 					abtEndTick = ABTEndMsg.getTick();
+					Logger.printMsg(getAID(), "Received ABT End | abtEndTick = " + abtEndTick);
 				} catch (UnreadableException e) {
 					e.printStackTrace();
 					return;
