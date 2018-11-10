@@ -49,6 +49,7 @@ public class AirplaneAgent extends Agent {
 	
 	private double abtEndTick;
 	private boolean isABTRunning = false;
+	private double startTick;
 	
 	// Grid units / tick.
 	private int minSpeed = 20 / JADELauncher.TICKS_PER_HOUR;
@@ -85,6 +86,14 @@ public class AirplaneAgent extends Agent {
 		agentsInAirport = new TreeMap<Integer,AID>();
 
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
+	}
+	
+	public String getOriginalDomain() {
+		return originalDomain.first() + " | " + originalDomain.last();
+	}
+	
+	public String getCurrentDomain() {
+		return currentDomain.first() + " | " + currentDomain.last();
 	}
 	
 	public String getStatus() {
@@ -174,11 +183,11 @@ public class AirplaneAgent extends Agent {
 			}
 			break;
 		case BLIND_FLIGHT: // must await landing scheduling and start travel
-			System.out.println("in blind flight | " + isABTRunning);
 			if (isABTRunning) {
 				return;
 			} else {
 				status = AirplaneStatus.FLIGHT;
+				startTick = abtEndTick;
 			}
 			break;
 		case FLIGHT: // must travel to and land in airport
@@ -190,6 +199,7 @@ public class AirplaneAgent extends Agent {
 					id = originalId;
 				}
 			} else {
+				fuelRemaining--;
 				NdPoint myPoint = space.getLocation(this);
 				NdPoint otherPoint = new NdPoint(pt.getX(), pt.getY());
 				double angle = SpatialMath.calcAngleFor2DMovement(space, myPoint, otherPoint);
@@ -207,9 +217,14 @@ public class AirplaneAgent extends Agent {
 		GridPoint myPoint = grid.getLocation(this);
 		GridPoint otherPoint = currentAirport.getGridPoint();
 		double distance = grid.getDistance(myPoint, otherPoint);
-		int minTick = (int) Math.ceil(distance / maxSpeed);
-		int maxTick = fuelRemaining;
 		
+		int deltaTicks = (int) (RepastEssentials.GetTickCount() - startTick);
+		int fastestEtaTicks = (int) (distance / maxSpeed);
+		
+		int minTick = deltaTicks + fastestEtaTicks;
+		int maxTick = fuelRemaining + deltaTicks;
+		
+		Logger.printMsg(getAID(), "deltaTicks | new min | new max: " + deltaTicks + " | " + minTick + " | " + maxTick);
 		originalDomain = (TreeSet<Integer>) originalDomain.subSet(minTick, maxTick);
 		currentDomain = (TreeSet<Integer>) currentDomain.subSet(minTick, maxTick);
 	}
@@ -536,6 +551,8 @@ public class AirplaneAgent extends Agent {
 			int minTick = (int) Math.ceil(distance / maxSpeed);
 			int maxTick = fuelRemaining;
 			// initialize domains
+			originalDomain = new TreeSet<Integer>();
+			currentDomain = new TreeSet<Integer>();
 			for (int i = minTick; i <= maxTick; i++) {
 				originalDomain.add(i);
 				currentDomain.add(i);
@@ -554,7 +571,8 @@ public class AirplaneAgent extends Agent {
 
 		boolean done = false;
 		int state = 0;
-		MessageTemplate mtAgents = MessageTemplate.MatchPerformative(M_Agents.performative);
+		MessageTemplate mtAgents = MessageTemplate.and(MessageTemplate.MatchPerformative(M_Agents.performative),
+				MessageTemplate.MatchProtocol(M_Agents.protocol));
 
 		@Override
 		public void action() {
