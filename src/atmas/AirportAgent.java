@@ -37,7 +37,7 @@ public class AirportAgent extends Agent {
 	// for each agentId, saves it's AID
 	private TreeMap<Integer, AID> connectedAirplanes;
 	
-	public AirportAgent(ContinuousSpace<Object> space, Grid<Object> grid, long l, long m){
+	public AirportAgent(ContinuousSpace<Object> space, Grid<Object> grid){
 		this.space = space;
 		this.grid = grid;
 		connectedAirplanes = new TreeMap<Integer,AID>();

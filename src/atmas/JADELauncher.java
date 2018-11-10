@@ -75,26 +75,29 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	private void setup(ContainerController mainContainer) {
 		// startup airport agents
 		for(int i = 0; i < numAirports; i++) {
+			AirportAgent ag = new AirportAgent(space, grid);
 			try {
-				AirportAgent ag = new AirportAgent(space, grid, Math.round(Math.random()*grid_size), Math.round(Math.random()*grid_size));
 				mainContainer.acceptNewAgent("airport"+i,ag).start();
-				context.add(ag);
-				airports.add(ag);
 			} catch (StaleProxyException e) {
 				e.printStackTrace();
 			}
+			context.add(ag);
+			airports.add(ag);
 		}
 		// startup plane agents
 		for (int i = 0; i < numAirplanes; i++) {
+			int airportIndex = (int)(Math.random()*numAirports);
+			AirportAgent airportSelected = airports.get(airportIndex);
+			AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected);
 			try {
-				int airportIndex = (int)(Math.random()*numAirports);
-				AirportAgent airportSelected = airports.get(airportIndex);
-				AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected);
 				mainContainer.acceptNewAgent("airplane"+i, airplane).start();
-				context.add(airplane);
 			} catch(StaleProxyException e) {
 				e.printStackTrace();
 			}
+			context.add(airplane);
+			// TODO: Move to origin airports once travel is implemented.
+//			space.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));
+//			grid.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));
 		}
 		
 		for (Object obj : context) {
