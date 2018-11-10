@@ -26,7 +26,7 @@ import repast.simphony.space.grid.WrapAroundBorders;
 import sajas.sim.repasts.RepastSLauncher;
 
 public class JADELauncher extends RepastSLauncher implements ContextBuilder<Object> {
-
+	
 	// 1 tick = 5 minutes.
 	static final public int TICKS_PER_HOUR = 12;
 	

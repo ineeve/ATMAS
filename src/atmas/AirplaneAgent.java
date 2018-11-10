@@ -3,7 +3,7 @@ package atmas;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -84,7 +84,7 @@ public class AirplaneAgent extends Agent {
 		currentDomain = new HashSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
-		
+
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
@@ -96,24 +96,17 @@ public class AirplaneAgent extends Agent {
 	
 	@Override
 	public void setup() {
-		okListeningBehaviour = new OkListeningBehaviour();
-		nogoodListeningBehaviour = new NogoodListeningBehaviour();
+		addBehaviour(new OkListeningBehaviour());
+		addBehaviour(new NogoodListeningBehaviour());
 		addBehaviour(new SetDomainBehaviour());
 		addBehaviour(new ConnectToAirportBehaviour());
 		addBehaviour(new ConnectListeningBehaviour());
-		
-		addBehaviour(okListeningBehaviour);
-		addBehaviour(nogoodListeningBehaviour);
-		//addBehaviour(new ResetBehaviour());
-		//addBehaviour(new StartBehaviour());
 		addBehaviour(new StopBehaviour());
 	}
 	
 	@Override
 	public void takeDown() {
 		 Logger.printErrMsg(getAID(),"takedown");
-		 removeBehaviour(okListeningBehaviour);
-		 removeBehaviour(nogoodListeningBehaviour);
 	}
 	
 	/**
@@ -212,12 +205,6 @@ public class AirplaneAgent extends Agent {
 		return true;
 	}
 	
-	private void printView() {
-		agentView.forEach((id, value) -> {
-			Logger.printMsg(getAID(), "id: " + id + " ; value: " + value.getValue());
-		});
-	}
-	
 	/**
 	 * Send ok message to all lower priority agents
 	 */
@@ -257,14 +244,6 @@ public class AirplaneAgent extends Agent {
 		send(aclOkMessage);
 	}
 	
-
-	private void sendResetDone(AID higherPriorityAgent) {
-		ACLMessage resetDoneMessage = new ACLMessage(M_ResetDone.performative);
-		resetDoneMessage.setProtocol(M_ResetDone.protocol);
-		resetDoneMessage.addReceiver(higherPriorityAgent);
-		send(resetDoneMessage);
-	}
-	
 	public void parseOkMessage(M_Ok okMessage, AID sender) {
 		AgentViewValue avv = new AgentViewValue(okMessage.getValue(), sender);
 		Logger.printMsg(getAID(), "Received ok " + okMessage.getValue() + " from " + sender.getLocalName());
@@ -276,6 +255,24 @@ public class AirplaneAgent extends Agent {
 			}
 		}
 		tryToGetNewValue();
+		if (agentsInAirport.tailMap(id+1).size() == 0) {
+			// if I am the element with less priority, check for ABT end (success).
+			checkABTSuccess();
+		}
+	}
+	
+	private void checkABTSuccess() {
+		HashSet<Integer> h = new HashSet<Integer>();
+		if (value == null) return;
+		h.add(value);
+		agentView.values().forEach(avv -> {
+			Integer agentValue = avv.getValue();
+			if (agentValue == null || h.add(agentValue) == false) {
+				return; // ABT has not ended yet
+			}
+		});
+		isABTRunning = false;
+		Logger.printMsg(getAID(), "ABT ended");
 	}
 	
 	private void tryToGetNewValue() {
@@ -345,26 +342,6 @@ public class AirplaneAgent extends Agent {
 		send(nogoodACLMsg);
 		//Logger.printMsg(getAID(), "Sent nogood to " + receiver.getLocalName());
 	}
-
-	/**
-	 * 
-	 * @return True if reset was send to child, false if there was no child
-	 */
-	private boolean sendResetToChild() {
-		Entry<Integer, AID> childEntry = agentsInAirport.ceilingEntry(id + 1);
-		if (childEntry != null) {
-			AID child = childEntry.getValue();
-			if (child != null) {
-				ACLMessage msg = new ACLMessage(M_Reset.performative);
-				msg.setProtocol(M_Reset.protocol);
-				msg.addReceiver(child);
-				send(msg);
-				return true;
-			}
-		}
-		return false;
-		
-	}
 	
 	private void parseNogoodMsg(M_Nogood nogoodMsg) {
 		// check if nogood is consistent with agentview
@@ -379,7 +356,6 @@ public class AirplaneAgent extends Agent {
 		}
 		if (!myNogood.getValue().equals(value)) {
 			Logger.printMsg(getAID(), "Ignoring nogood, reason: " + myNogood.getValue() + " " + value);
-			printView();
 			return;
 		}
 		
@@ -390,9 +366,7 @@ public class AirplaneAgent extends Agent {
 		currentDomain.remove(myNogood.getValue());
 		// try to get new value
 		tryToGetNewValue();
-		// if I am not the most priority Agent, add myNogood again to domain
-		
-		
+		// if I am not the most priority Agent, add myNogood again to domain		
 	}
 	
 	class NogoodListeningBehaviour extends CyclicBehaviour {
@@ -439,70 +413,6 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	
-	class ResetBehaviour extends CyclicBehaviour {
-		
-		MessageTemplate mtReset = MessageTemplate.and(
-				MessageTemplate.MatchPerformative(M_Reset.performative),
-				MessageTemplate.MatchProtocol(M_Reset.protocol));
-		
-		MessageTemplate mtResetDone = MessageTemplate.and(
-				MessageTemplate.MatchPerformative(M_ResetDone.performative),
-				MessageTemplate.MatchProtocol(M_ResetDone.protocol));
-		
-		boolean resetReceived = false;
-		AID agentWhoAskedReset;
-		
-		@Override
-		public void action() {
-			if (!resetReceived) {
-				ACLMessage resetMsg = receive(mtReset);
-				if (resetMsg != null) {
-					agentWhoAskedReset = resetMsg.getSender();
-					resetReceived = true;
-					if (!sendResetToChild()) {
-						resetState();
-						sendResetDone(agentWhoAskedReset);
-						resetReceived = false;
-					}
-				} else {
-					block();
-				}
-			}
-			
-			if (resetReceived) {
-				// reset was received and sent, now wait for response
-				ACLMessage resetDoneMsg = receive(mtResetDone);
-				if (resetDoneMsg != null) {
-					resetState();
-					sendResetDone(agentWhoAskedReset);
-					resetReceived = false;
-				} else {
-					block();
-				}
-			}
-		}
-	}
-		
-	class StartBehaviour extends CyclicBehaviour {
-
-		MessageTemplate mt = MessageTemplate.and(
-				MessageTemplate.MatchPerformative(M_Start.performative),
-				MessageTemplate.MatchProtocol(M_Start.protocol));
-		
-		@Override
-		public void action() {
-			ACLMessage startMsg = receive(mt);
-			if (startMsg != null) {
-				Logger.printMsg(getAID(), "received start");
-				chooseNewValue();
-				sendOkMessage();
-			} else {
-				block();
-			}
-			
-		}
-	}
-	
 	class StopBehaviour extends CyclicBehaviour {
 		MessageTemplate mt = MessageTemplate.and(
 				MessageTemplate.MatchPerformative(M_Stop.performative),
@@ -517,10 +427,7 @@ public class AirplaneAgent extends Agent {
 				block();
 			}
 			
-		}
-		
-		
-		
+		}		
 	}
 		
 	
@@ -529,7 +436,7 @@ public class AirplaneAgent extends Agent {
 		boolean done = false;
 		@Override
 		public void action() {
-			int domainSize = 8;
+			int domainSize = Integer.MAX_VALUE;
 			// initialize domains
 			for (int i = 0; i < domainSize; i++) {
 				originalDomain.add(i);
