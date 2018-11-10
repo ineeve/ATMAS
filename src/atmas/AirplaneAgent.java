@@ -43,8 +43,8 @@ public class AirplaneAgent extends Agent {
 	private AirportWrapper currentAirport;
 	private TreeMap<Integer,AID> agentsInAirport;
 	private Integer value;
-	private Set<Integer> originalDomain;
-	private Set<Integer> currentDomain;
+	private TreeSet<Integer> originalDomain;
+	private TreeSet<Integer> currentDomain;
 	
 	private boolean isABTRunning = false;
 	
@@ -74,11 +74,15 @@ public class AirplaneAgent extends Agent {
 		this.airports = airports;
 		this.currentAirport = origin;
 		originalDomain = new TreeSet<Integer>();
-		currentDomain = new HashSet<Integer>();
+		currentDomain = new TreeSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
 
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
+	}
+	
+	public Integer getValue() {
+		return value;
 	}
 	
 	private void resetState() {
@@ -574,6 +578,7 @@ public class AirplaneAgent extends Agent {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
 				try {
+					isABTRunning = true;
 					M_Connect connectMsg = (M_Connect) msg.getContentObject();
 					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
 					if (connectMsg.getAgentId() > id) {
