@@ -53,9 +53,9 @@ public class AirplaneAgent extends Agent {
 	private double startTick;
 	
 	// Grid units / tick.
-	private int minSpeed = 20 / JADELauncher.TICKS_PER_HOUR;
-	private int maxSpeed = 50 / JADELauncher.TICKS_PER_HOUR;
-	private int realSpeed = minSpeed;
+	private double minSpeed = 12 / JADELauncher.TICKS_PER_HOUR;
+	private double maxSpeed = 24 / JADELauncher.TICKS_PER_HOUR;
+	private double realSpeed = minSpeed;
 	
 	public static final int maxFuel = 14 * JADELauncher.TICKS_PER_HOUR;
 	
@@ -97,11 +97,11 @@ public class AirplaneAgent extends Agent {
 		return isABTRunning;
 	}
 	
-	public int getMaxSpeed() {
+	public double getMaxSpeed() {
 		return maxSpeed;
 	}
 	
-	public int getMinSpeed() {
+	public double getMinSpeed() {
 		return minSpeed;
 	}
 	
@@ -488,7 +488,9 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			return;
 		}
 		if (agentView.size() != agentsInAirport.size()) {
-			Logger.printErrMsg(getAID(), "Checking ABT success: agentViewSize != agentsInAirportSize: " + agentView.size() + " != " + agentsInAirport.size());
+			if (agentView.size() > agentsInAirport.size()) {
+				Logger.printErrMsg(getAID(), "Checking ABT success: agentViewSize != agentsInAirportSize: " + agentView.size() + " != " + agentsInAirport.size());
+			}
 			agentView.forEach((k,avv)->{
 				Logger.printMsg(getAID(), k + "->" + avv.getValue());
 			});
