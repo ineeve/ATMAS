@@ -14,16 +14,21 @@ public class M_Connect implements Serializable {
 
 	private static final long serialVersionUID = 4044390113376790821L;
 	private int agentId;
-	private AID agentAID;
 	public static int performative = ACLMessage.REQUEST;
 	public static String protocol = "P_CONNECT";
+	private int value;
 	
-	public M_Connect(int agentId) {
+	public M_Connect(int agentId, int value) {
 		this.agentId = agentId;
+		this.value = value;
 	}
 	
 	public int getAgentId() {
 		return agentId;
+	}
+	
+	public int getValue() {
+		return value;
 	}
 
 }

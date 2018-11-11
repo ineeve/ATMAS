@@ -89,6 +89,11 @@ public class AirplaneAgent extends Agent {
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
+	public void clearAgentsInAirport() {
+		agentsInAirport.clear();
+		Logger.printMsg(getAID(), "Clear Agents In Airport");
+	}
+	
 	public boolean getIsABTRunning() {
 		return isABTRunning;
 	}
@@ -135,7 +140,7 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	private void resetState() {
-		agentsInAirport.clear();
+		clearAgentsInAirport();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		currentDomain.addAll(originalDomain);
 		value = null;
@@ -218,7 +223,8 @@ public class AirplaneAgent extends Agent {
 			}
 			break;
 		case FLIGHT: // must travel to and land in airport
-			if (isABTRunning || value == null) {
+			if (isABTRunning) {
+				Logger.printMsg(getAID(), "ABT is running");
 				return;
 			}
 			GridPoint pt = currentAirport.getGridPoint();
@@ -382,20 +388,30 @@ public class AirplaneAgent extends Agent {
 		tryToGetNewValue();
 		if (agentsInAirport.tailMap(id+1).size() == 0) {
 			// if I am the element with less priority, check for ABT end (success).
-			Logger.printErrMsg(getAID(), "Checking ABT success");
+			
 			checkABTSuccess();
 		}
 	}
 	
 	private void checkABTSuccess() {
+		Logger.printErrMsg(getAID(), "Checking ABT success");
 		HashSet<Integer> h = new HashSet<Integer>();
-		if (value == null) return;
-		if (agentView.size() != agentsInAirport.size()) return;
-		Logger.printErrMsg(getAID(), "didn't return on agents airport size");
+		if (value == null) {
+			Logger.printErrMsg(getAID(), "Checking ABT success: value=null");
+			return;
+		}
+		if (agentView.size() != agentsInAirport.size()) {
+			Logger.printErrMsg(getAID(), "Checking ABT success: agentViewSize != agentsInAirportSize: " + agentView.size() + " != " + agentsInAirport.size());
+			agentView.forEach((k,avv)->{
+				Logger.printMsg(getAID(), id + "->" + avv.getValue());
+			});
+			return;
+		}
 		h.add(value);
 		for (AgentViewValue avv : agentView.values()) {
 			Integer agentValue = avv.getValue();
 			if (agentValue == null || h.add(agentValue) == false) {
+				Logger.printErrMsg(getAID(), "Checking ABT success: duplicated value in agentView");
 				return; // ABT has not ended yet
 			}
 		}
@@ -471,6 +487,7 @@ public class AirplaneAgent extends Agent {
 	
 	private void backtrack() {
 		// current agent view is a nogood
+		Logger.printErrMsg(getAID(), "Generating Nogood");
 		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
 		if (agentView.size() == 0) { // agentView.size == 0 means that I am the agent with most priority
 			// TERMINATE, Broadcast stop message
@@ -670,15 +687,19 @@ public class AirplaneAgent extends Agent {
 
 		private boolean disconnectCurrent = true;
 
-		public ConnectToNewAirportBehaviour() {}
+		public ConnectToNewAirportBehaviour() {
+			Logger.printMsg(getAID(), "Created Connect to new airport behaviour");
+		}
 		public ConnectToNewAirportBehaviour(boolean disconnectCurrent) {
 			this.disconnectCurrent = disconnectCurrent;
+			Logger.printMsg(getAID(), "Created Connect to new airport behaviour. Disconnecting from current: " + disconnectCurrent);
 		}
 		
 		@Override
 		public void action() {
 			switch (state) {
 			case 0: // Request disconnect from current
+				
 				isABTRunning = true;
 				if (disconnectCurrent) {
 					sendDisconnectAirport();
@@ -686,6 +707,7 @@ public class AirplaneAgent extends Agent {
 				state++;
 				break;
 			case 1: // Confirm disconnect and pick new one, set new domains
+				
 				if (disconnectCurrent) {
 					ACLMessage disconnectDoneACLMsg = receive(mtDisconnect);
 					if (disconnectDoneACLMsg != null) {
@@ -702,51 +724,51 @@ public class AirplaneAgent extends Agent {
 				setNewDomains();
 				break;
 			case 2:
+				
 				// Request airplanes to airport
-				if (disconnectCurrent) {
-					Logger.printMsg(getAID(), "Starting Connect Protocol");
-					M_RequestAgents requestAgentsMsg = new M_RequestAgents(id);
-					String replyWith = requestAgentsMsg.getReplyWith();
-					ACLMessage requestAgentsACL = new ACLMessage(M_RequestAgents.performative);
-					requestAgentsACL.setProtocol(M_RequestAgents.protocol);
-					try {
-						requestAgentsACL.setContentObject(requestAgentsMsg);
-					} catch (IOException e1) {
-						e1.printStackTrace();
-						return;
-					}
-					requestAgentsACL.setReplyWith(replyWith);
-					requestAgentsACL.addReceiver(currentAirport.getAID());
-					send(requestAgentsACL);
+
+				Logger.printMsg(getAID(), "Starting Connect Protocol");
+				M_RequestAgents requestAgentsMsg = new M_RequestAgents(id);
+				String replyWith = requestAgentsMsg.getReplyWith();
+				ACLMessage requestAgentsACL = new ACLMessage(M_RequestAgents.performative);
+				requestAgentsACL.setProtocol(M_RequestAgents.protocol);
+				try {
+					requestAgentsACL.setContentObject(requestAgentsMsg);
+				} catch (IOException e1) {
+					e1.printStackTrace();
+					return;
 				}
+				requestAgentsACL.setReplyWith(replyWith);
+				requestAgentsACL.addReceiver(currentAirport.getAID());
+				send(requestAgentsACL);
 				state++;
 				break;
 			case 3:
 				// Get airplanes in airport
-				if (disconnectCurrent) {
-					ACLMessage agentsACLMsg = receive(mtAgents);
-					if (agentsACLMsg != null) {
-						M_Agents agentsMsg;
-						agentsInAirport.clear();
-						try {
-							agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
-						} catch (UnreadableException e) {
-							e.printStackTrace();
-							return;
-						}
-						agentsInAirport.putAll(agentsMsg.getAgents());
-						agentsInAirport.remove(id); // remove self
-						state++;
-					} else {
-						block();
+				
+				ACLMessage agentsACLMsg = receive(mtAgents);
+				if (agentsACLMsg != null) {
+					M_Agents agentsMsg;
+					try {
+						agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
+					} catch (UnreadableException e) {
+						e.printStackTrace();
+						return;
 					}
-				} else {
+					agentsInAirport.putAll(agentsMsg.getAgents());
+					agentsInAirport.remove(id); // remove self
 					state++;
+				} else {
+					block();
 				}
 				break;
 			case 4:
 				// Connect to other airplanes
-				M_Connect connectObject = new M_Connect(id);
+				chooseNewValue();
+				if (agentsInAirport.size() == 0) {
+					isABTRunning = false;
+				}
+				M_Connect connectObject = new M_Connect(id, value);
 				ACLMessage connectACL = new ACLMessage(M_Connect.performative);
 				connectACL.setProtocol(M_Connect.protocol);
 				try {
@@ -759,13 +781,9 @@ public class AirplaneAgent extends Agent {
 					connectACL.addReceiver(aid);
 				});
 				send(connectACL);
-				state++;
-				break;
-			case 5:
-				tryToGetNewValue();
 				done = true;
 				state++;
-				Logger.printMsg(getAID(), "Ending Connect Protocol (from new airplane side)");
+				break;
 			default:
 				return;
 			}		
@@ -791,11 +809,22 @@ public class AirplaneAgent extends Agent {
 					isABTRunning = true;
 					M_Connect connectMsg = (M_Connect) msg.getContentObject();
 					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
+					agentView.put(connectMsg.getAgentId(), new AgentViewValue(connectMsg.getValue(), msg.getSender()));
+					Logger.printMsg(getAID(), "Received connect from " + connectMsg.getAgentId() + " with value " + connectMsg.getValue());
 					if (connectMsg.getAgentId() > id) {
 						if (value != null) {
 							sendOkMessage();
+						} else {
+							tryToGetNewValue();
 						}
 						
+					} else {
+						Logger.printMsg(getAID(), "mijar");
+						if (value == null || value.intValue() == connectMsg.getValue()) {
+							Logger.printMsg(getAID(), "coco");
+							tryToGetNewValue();
+						}
+						checkABTSuccess();
 					}
 				} catch (UnreadableException e) {
 					e.printStackTrace();
