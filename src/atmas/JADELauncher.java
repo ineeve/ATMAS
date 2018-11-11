@@ -23,6 +23,7 @@ import repast.simphony.space.continuous.NdPoint;
 import repast.simphony.space.continuous.RandomCartesianAdder;
 import repast.simphony.space.grid.Grid;
 import repast.simphony.space.grid.GridBuilderParameters;
+import repast.simphony.space.grid.GridPoint;
 import repast.simphony.space.grid.SimpleGridAdder;
 import repast.simphony.space.grid.WrapAroundBorders;
 import sajas.sim.repasts.RepastSLauncher;
@@ -33,7 +34,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	static final public int TICKS_PER_HOUR = 12;
 	
 	private int numAirports = 2;
-	private int numAirplanes = 2;
+	private int numAirplanes = 3;
 	private int grid_size = 30;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	
@@ -75,6 +76,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	}
 	
 	private void setup(ContainerController mainContainer) {
+		airports.clear();
 		// startup airport agents
 		for(int i = 0; i < numAirports; i++) {
 			AirportAgent ag = new AirportAgent(space, grid);
@@ -99,8 +101,9 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 				e.printStackTrace();
 			}
 			context.add(airplane);
-			NdPoint pt = space.getLocation(airplane);
-			grid.moveTo(airplane, (int) pt.getX(), (int) pt.getY());
+			GridPoint pt = airportSelected.getGridPoint();
+			space.moveTo(airplane, pt.getX(), pt.getY());
+			grid.moveTo(airplane, pt.getX(), pt.getY());
 			// TODO: Move to origin airports once travel is implemented.
 //			space.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));
 //			grid.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));

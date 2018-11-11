@@ -3,6 +3,7 @@ package atmas;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -88,6 +89,18 @@ public class AirplaneAgent extends Agent {
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
+	public int getMaxSpeed() {
+		return maxSpeed;
+	}
+	
+	public int getMinSpeed() {
+		return minSpeed;
+	}
+	
+	public String getAirport() {
+		return currentAirport.getAID().getLocalName();
+	}
+	
 	public double getStartTick() {
 		return startTick;
 	}
@@ -161,6 +174,7 @@ public class AirplaneAgent extends Agent {
 		// connect to it
 		// TODO: Do not reconnect when it already is the closest.
 		//addBehaviour(new SetDomainBehaviour());
+		isABTRunning = true;
 		addBehaviour(new ConnectToNewAirportBehaviour());
 		
 		// regular scheduled move function will then land it
@@ -178,7 +192,6 @@ public class AirplaneAgent extends Agent {
 				//addBehaviour(new SetDomainBehaviour());
 				addBehaviour(new ConnectToNewAirportBehaviour(false));
 			} else if (isABTRunning) { // during algorithm
-				Logger.printMsg(getAID(), "Parked - ABT running");
 				return;
 			} else if (currentTick >= value + abtEndTick) { // post-algorithm, takeoff at picked time
 				Logger.printMsg(getAID(), "Taking off");
@@ -195,13 +208,20 @@ public class AirplaneAgent extends Agent {
 			if (isABTRunning) {
 				return;
 			} else {
+				refuel();
 				status = AirplaneStatus.FLIGHT;
 				startTick = abtEndTick;
 			}
 			break;
 		case FLIGHT: // must travel to and land in airport
+			if (isABTRunning) {
+				return;
+			}
 			GridPoint pt = currentAirport.getGridPoint();
 			if (pt.equals(grid.getLocation(this))) {
+				if (value == null) {
+					Logger.printErrMsg(getAID(), "VALUE IS NULL");
+				}
 				if (currentTick >= value + abtEndTick) { // land at picked time
 					Logger.printMsg(getAID(), "Landing");
 					status = AirplaneStatus.PARKED;
@@ -223,6 +243,10 @@ public class AirplaneAgent extends Agent {
 		}
 	}
 
+	private void refuel() {
+		fuelRemaining = maxFuelHours * JADELauncher.TICKS_PER_HOUR;
+	}
+
 	private void updateDomain() {
 		GridPoint myPoint = grid.getLocation(this);
 		GridPoint otherPoint = currentAirport.getGridPoint();
@@ -232,10 +256,27 @@ public class AirplaneAgent extends Agent {
 		int fastestEtaTicks = (int) (distance / maxSpeed);
 		
 		int minTick = deltaTicks + fastestEtaTicks;
-		int maxTick = fuelRemaining + deltaTicks;
+		//int maxTick = fuelRemaining + deltaTicks;
 		
-		originalDomain = (TreeSet<Integer>) originalDomain.subSet(minTick, maxTick);
-		currentDomain = (TreeSet<Integer>) currentDomain.subSet(minTick, maxTick);
+		// Logger.printMsg(getAID(), "new min | new max: " + minTick + " | " + maxTick);
+		//originalDomain = (TreeSet<Integer>) originalDomain.subSet(minTick, maxTick);
+		// TreeSet.subSet on current may throw exception
+//		for (Integer lowerElem : currentDomain.headSet(minTick)) {
+//			currentDomain.remove(lowerElem);
+//		}
+		for (Iterator<Integer> it = originalDomain.iterator(); it.hasNext(); ) {
+			Integer elem = it.next();
+			if (elem < minTick) {
+				it.remove();
+			}
+		}
+		for (Iterator<Integer> it = currentDomain.iterator(); it.hasNext(); ) {
+			Integer elem = it.next();
+			if (elem < minTick) {
+				it.remove();
+			}
+		}
+		//currentDomain = (TreeSet<Integer>) currentDomain.subSet(minTick, maxTick);
 	}
 
 	private AirportWrapper chooseNewDestiny() {
@@ -272,11 +313,11 @@ public class AirplaneAgent extends Agent {
 	
 	private boolean chooseNewValue() {
 		if (currentDomain.size() == 0) return false;
-		int randomIndex = (int) (Math.random() * currentDomain.size());
-		do {
+		//int randomIndex = (int) (Math.random() * currentDomain.size());
+		//do {
 			value = currentDomain.iterator().next();
-			randomIndex--;
-		} while (randomIndex >= 0);
+		//	randomIndex--;
+		//} while (randomIndex >= 0);
 		Logger.printMsg(getAID(), "updated value to " + value);
 		return true;
 	}
@@ -367,7 +408,7 @@ public class AirplaneAgent extends Agent {
 		@Override
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
-			if (aclMsg != null) {
+			if (aclMsg != null && value != null) { // ABT hasn't ended if value is null, others will resume once this sends OK with value
 				try {
 					M_ABTEnd ABTEndMsg = (M_ABTEnd) aclMsg.getContentObject();
 					abtEndTick = ABTEndMsg.getTick();
@@ -634,6 +675,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			switch (state) {
 			case 0: // Request disconnect from current
+				isABTRunning = true;
 				if (disconnectCurrent) {
 					sendDisconnectAirport();
 				}
@@ -687,6 +729,7 @@ public class AirplaneAgent extends Agent {
 						return;
 					}
 					agentsInAirport.putAll(agentsMsg.getAgents());
+					agentsInAirport.remove(id); // remove self
 					state++;
 				} else {
 					block();
