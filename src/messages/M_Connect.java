@@ -17,10 +17,12 @@ public class M_Connect implements Serializable {
 	public static int performative = ACLMessage.REQUEST;
 	public static String protocol = "P_CONNECT";
 	private int value;
+	private AID airportAID;
 	
-	public M_Connect(int agentId, int value) {
+	public M_Connect(int agentId, int value, AID airportAID) {
 		this.agentId = agentId;
 		this.value = value;
+		this.airportAID = airportAID;
 	}
 	
 	public int getAgentId() {
@@ -29,6 +31,10 @@ public class M_Connect implements Serializable {
 	
 	public int getValue() {
 		return value;
+	}
+	
+	public AID getAirport() {
+		return airportAID;
 	}
 
 }

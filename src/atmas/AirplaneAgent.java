@@ -43,12 +43,12 @@ public class AirplaneAgent extends Agent {
 	private TreeMap<Integer, AgentViewValue> agentView; //the state of the world recognized by this agent
 	private ArrayList<AirportWrapper> airports;
 	private AirportWrapper currentAirport;
+	private boolean isConnectedToAirport;
 	private TreeMap<Integer,AID> agentsInAirport;
 	private Integer value;
 	private TreeSet<Integer> originalDomain;
 	private TreeSet<Integer> currentDomain;
-	
-	private double abtEndTick;
+	private boolean isReseting;
 	private boolean isABTRunning = false;
 	private double startTick;
 	
@@ -57,8 +57,7 @@ public class AirplaneAgent extends Agent {
 	private int maxSpeed = 50 / JADELauncher.TICKS_PER_HOUR;
 	private int realSpeed = minSpeed;
 	
-	public static final int maxFuelHours = 14;
-	private int fuelRemaining = maxFuelHours * JADELauncher.TICKS_PER_HOUR; // ticks of fuel remaining
+	public static final int maxFuel = 14 * JADELauncher.TICKS_PER_HOUR;
 	
 	private AirplaneStatus status = AirplaneStatus.PARKED;
 	private boolean parkedIdle = true;
@@ -80,12 +79,12 @@ public class AirplaneAgent extends Agent {
 		this.originalId = id;
 		this.id = id;
 		this.airports = airports;
-		this.currentAirport = origin;
+		setAirport(origin);
 		originalDomain = new TreeSet<Integer>();
 		currentDomain = new TreeSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
-
+		this.isReseting = false;
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
@@ -108,6 +107,11 @@ public class AirplaneAgent extends Agent {
 	
 	public String getAirport() {
 		return currentAirport.getAID().getLocalName();
+	}
+	
+	private void setAirport(AirportWrapper airport) {
+		currentAirport = airport;
+		isConnectedToAirport = true;
 	}
 	
 	public double getStartTick() {
@@ -153,6 +157,102 @@ public class AirplaneAgent extends Agent {
 		addBehaviour(new ConnectListeningBehaviour());
 		addBehaviour(new StopBehaviour());
 		addBehaviour(new ListenABTEnd());
+		addBehaviour(new NotInAirportListeningBehaviour());
+		addBehaviour(new ListenResetBehaviour());
+	}
+	
+	private void sendResetDone(AID higherPriorityAgent) {
+		ACLMessage resetDoneMessage = new ACLMessage(M_ResetDone.performative);
+		resetDoneMessage.setProtocol(M_ResetDone.protocol);
+		resetDoneMessage.addReceiver(higherPriorityAgent);
+		send(resetDoneMessage);
+		Logger.printMsg(getAID(), "Sent reset_done to " + higherPriorityAgent.getLocalName());
+	}
+	
+	/**
+	 * 
+	 * @return True if reset was send to child, false if there was no child
+	 */
+	private boolean sendResetToChild(M_Reset resetContent) {
+		Entry<Integer, AID> childEntry = agentsInAirport.ceilingEntry(id + 1);
+		if (childEntry != null) {
+			AID child = childEntry.getValue();
+			if (child != null) {
+				ACLMessage msg = new ACLMessage(M_Reset.performative);
+				msg.setProtocol(M_Reset.protocol);
+				try {
+					msg.setContentObject(resetContent);
+				} catch (IOException e) {
+					e.printStackTrace();
+					return false;
+				}
+				msg.addReceiver(child);
+				send(msg);
+				return true;
+			}
+		}
+		return false;
+		
+	}
+	
+class ListenResetBehaviour extends CyclicBehaviour {
+		
+		MessageTemplate mtReset = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_Reset.performative),
+				MessageTemplate.MatchProtocol(M_Reset.protocol));
+		
+		MessageTemplate mtResetDone = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_ResetDone.performative),
+				MessageTemplate.MatchProtocol(M_ResetDone.protocol));
+	
+		AID agentWhoAskedReset;
+		int disconnectedAgentId;
+		
+		@Override
+		public void action() {
+			if (!isReseting) {
+				ACLMessage resetACLMsg = receive(mtReset);
+				if (resetACLMsg != null) {
+					isReseting = true;
+					M_Reset resetMsg;
+					agentWhoAskedReset = resetACLMsg.getSender();
+					 try {
+						resetMsg = (M_Reset) resetACLMsg.getContentObject();
+					} catch (UnreadableException e) {
+						e.printStackTrace();
+						return;
+					}
+					disconnectedAgentId = resetMsg.getAgentWhoLeft();
+					if (!sendResetToChild(resetMsg)) {
+						processResetDone(disconnectedAgentId, agentWhoAskedReset);
+					}
+				} else {
+					block();
+				}
+			}
+			if (isReseting) {
+				// reset was received and sent, now wait for response
+				ACLMessage resetDoneMsg = receive(mtResetDone);
+				if (resetDoneMsg != null) {
+					processResetDone(disconnectedAgentId, agentWhoAskedReset);
+				} else {
+					block();
+				}
+			}
+		}
+	}
+	
+	private void processResetDone(int disconnectedAgentId, AID agentWhoAskedReset) {
+		agentsInAirport.remove(disconnectedAgentId);
+		agentView.remove(disconnectedAgentId);
+		currentDomain.addAll(originalDomain);
+		value=null;
+		isReseting = false;
+		if (agentsInAirport.headMap(id).size() == 0) {
+			tryToGetNewValue();
+		} else {
+			sendResetDone(agentWhoAskedReset);
+		}
 	}
 	
 	@Override
@@ -177,7 +277,7 @@ public class AirplaneAgent extends Agent {
 	private void activateEmergency() {
 		Logger.printMsg(getAID(), "EMERGENCY - FINDING CLOSEST AIRPORT");
 		// find closest airport
-		currentAirport = AirportLocator.getClosest(space, space.getLocation(this), airports);
+		setAirport(AirportLocator.getClosest(space, space.getLocation(this), airports));
 		// set emergency priority (random avoids emergency collisions)
 		id = RandomHelper.nextIntFromTo(Integer.MIN_VALUE, -1);
 		// connect to it
@@ -200,80 +300,68 @@ public class AirplaneAgent extends Agent {
 				//resetState();
 				//addBehaviour(new SetDomainBehaviour());
 				addBehaviour(new ConnectToNewAirportBehaviour(false));
-			} else if (isABTRunning) { // during algorithm
+			} else if (isABTRunning || value == null) { // during algorithm
 				return;
-			} else if (currentTick >= value + abtEndTick) { // post-algorithm, takeoff at picked time
+			} else if (currentTick >= value) { // post-algorithm, takeoff at picked time
 				Logger.printMsg(getAID(), "Taking off");
 				status = AirplaneStatus.BLIND_FLIGHT;
 				// start algorithm in destiny airport
-				//currentAirport = chooseNewDestiny();
 				isABTRunning = true;
-				//resetState();
-				//addBehaviour(new SetDomainBehaviour());
 				addBehaviour(new ConnectToNewAirportBehaviour());
+				startTick = RepastEssentials.GetTickCount();
 			}
 			break;
 		case BLIND_FLIGHT: // must await landing scheduling and start travel
 			if (isABTRunning) {
 				return;
 			} else {
-				refuel();
 				status = AirplaneStatus.FLIGHT;
-				startTick = abtEndTick;
 			}
 			break;
 		case FLIGHT: // must travel to and land in airport
-			if (isABTRunning) {
-				Logger.printMsg(getAID(), "ABT is running");
+			if (isABTRunning || value == null) {
+				Logger.printMsg(getAID(), "ABT is running or value=null");
 				return;
 			}
-			GridPoint pt = currentAirport.getGridPoint();
-			if (pt.equals(grid.getLocation(this))) {
-				if (value == null) {
-					Logger.printErrMsg(getAID(), "VALUE IS NULL");
-				}
-				if (currentTick >= value + abtEndTick) { // land at picked time
+			if (isAtAirport()) {
+				if (currentTick >= value) { // land at picked time
 					Logger.printMsg(getAID(), "Landing");
 					status = AirplaneStatus.PARKED;
 					parkedIdle = true;
 					id = originalId;
 				}
 			} else {
-				fuelRemaining--;
 				NdPoint myPoint = space.getLocation(this);
+				GridPoint pt = currentAirport.getGridPoint();
 				NdPoint otherPoint = new NdPoint(pt.getX(), pt.getY());
 				double angle = SpatialMath.calcAngleFor2DMovement(space, myPoint, otherPoint);
-				double speed = Math.min(realSpeed, space.getDistance(myPoint, otherPoint)); // do not overshoot
-				space.moveByVector(this, speed, angle, 0);
+				double distance = realSpeed * (RepastEssentials.GetTickCount() - startTick);
+				double realDistance = Math.min(distance, space.getDistance(myPoint, otherPoint)); // do not overshoot
+				space.moveByVector(this, realDistance, angle, 0);
 				myPoint = space.getLocation(this);
 				grid.moveTo(this, (int) myPoint.getX(), (int) myPoint.getY());
-				updateDomain();
+				updateLandingDomain();
+				startTick = RepastEssentials.GetTickCount();
 			}
 			break;
 		}
 	}
 
-	private void refuel() {
-		fuelRemaining = maxFuelHours * JADELauncher.TICKS_PER_HOUR;
+	private boolean isAtAirport() {
+		GridPoint pt = currentAirport.getGridPoint();
+		Logger.printErrMsg(getAID(), "Distance to airport = " + grid.getDistance(pt, grid.getLocation(this)));
+		return grid.getDistance(pt, grid.getLocation(this)) <= 1;
 	}
 
-	private void updateDomain() {
+	private void updateLandingDomain() {
 		GridPoint myPoint = grid.getLocation(this);
 		GridPoint otherPoint = currentAirport.getGridPoint();
 		double distance = grid.getDistance(myPoint, otherPoint);
 		
-		int deltaTicks = (int) (RepastEssentials.GetTickCount() - startTick);
 		int fastestEtaTicks = (int) (distance / maxSpeed);
 		
-		int minTick = deltaTicks + fastestEtaTicks;
-		//int maxTick = fuelRemaining + deltaTicks;
+		int minTick = (int)RepastEssentials.GetTickCount() +  fastestEtaTicks;
 		
-		// Logger.printMsg(getAID(), "new min | new max: " + minTick + " | " + maxTick);
-		//originalDomain = (TreeSet<Integer>) originalDomain.subSet(minTick, maxTick);
-		// TreeSet.subSet on current may throw exception
-//		for (Integer lowerElem : currentDomain.headSet(minTick)) {
-//			currentDomain.remove(lowerElem);
-//		}
 		for (Iterator<Integer> it = originalDomain.iterator(); it.hasNext(); ) {
 			Integer elem = it.next();
 			if (elem < minTick) {
@@ -286,7 +374,6 @@ public class AirplaneAgent extends Agent {
 				it.remove();
 			}
 		}
-		//currentDomain = (TreeSet<Integer>) currentDomain.subSet(minTick, maxTick);
 	}
 
 	private AirportWrapper chooseNewDestiny() {
@@ -297,7 +384,7 @@ public class AirplaneAgent extends Agent {
 		return airports.get(airportIndex);
 	}
 	
-	private void sendDisconnectAirport() {
+	private void sendDisconnectAirportAndAgents() {
 		Logger.printMsg(getAID(), "Disconnecting from airport");
 		ACLMessage aclDisconnectMessage = new ACLMessage(M_Disconnect.performative);
 		try {
@@ -394,7 +481,7 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	private void checkABTSuccess() {
-		Logger.printErrMsg(getAID(), "Checking ABT success");
+		Logger.printMsg(getAID(), "Checking ABT success");
 		HashSet<Integer> h = new HashSet<Integer>();
 		if (value == null) {
 			Logger.printErrMsg(getAID(), "Checking ABT success: value=null");
@@ -403,7 +490,7 @@ public class AirplaneAgent extends Agent {
 		if (agentView.size() != agentsInAirport.size()) {
 			Logger.printErrMsg(getAID(), "Checking ABT success: agentViewSize != agentsInAirportSize: " + agentView.size() + " != " + agentsInAirport.size());
 			agentView.forEach((k,avv)->{
-				Logger.printMsg(getAID(), id + "->" + avv.getValue());
+				Logger.printMsg(getAID(), k + "->" + avv.getValue());
 			});
 			return;
 		}
@@ -429,14 +516,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
 			if (aclMsg != null && value != null) { // ABT hasn't ended if value is null, others will resume once this sends OK with value
-				try {
-					M_ABTEnd ABTEndMsg = (M_ABTEnd) aclMsg.getContentObject();
-					abtEndTick = ABTEndMsg.getTick();
-					Logger.printMsg(getAID(), "Received ABT End | abtEndTick = " + abtEndTick);
-				} catch (UnreadableException e) {
-					e.printStackTrace();
-					return;
-				}
+				Logger.printMsg(getAID(), "Received ABT End");
 				isABTRunning = false;
 			} else {
 				block();
@@ -452,13 +532,6 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage aclMsg = new ACLMessage(M_ABTEnd.performative);
 			aclMsg.setProtocol(M_ABTEnd.protocol);
-			abtEndTick = RepastEssentials.GetTickCount()+5;
-			try {
-				aclMsg.setContentObject(new M_ABTEnd(abtEndTick));
-			} catch (IOException e) {
-				e.printStackTrace();
-				return;
-			}
 			for (AID airplaneAID : agentsInAirport.values()) {
 				aclMsg.addReceiver(airplaneAID);
 			}
@@ -469,10 +542,12 @@ public class AirplaneAgent extends Agent {
 	
 	private void tryToGetNewValue() {
 		// Remove from current domain all values that were defined by agents with bigger or equal priority to the sender of this ok message
-		
+
+		int oldSize = currentDomain.size();
 		agentView.values().forEach(v -> {
 			currentDomain.remove(v.getValue());
 		});
+		Logger.printErrMsg(getAID(), "currentDomain.size() old | new = " + oldSize + " | " + currentDomain.size());
 		if (value == null || !currentDomain.contains(value)) {
 			if (chooseNewValue()) {
 				sendOkMessage(); // send ok to lower priority agents
@@ -576,12 +651,14 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
-				Logger.printMsg(getAID(), "Received Nogood");
-				try {
-					M_Nogood nogoodMsg = (M_Nogood) msg.getContentObject();
-					parseNogoodMsg(nogoodMsg);
-				} catch (UnreadableException e) {
-					e.printStackTrace();
+				if (!isReseting) {
+					Logger.printMsg(getAID(), "Received Nogood");
+					try {
+						M_Nogood nogoodMsg = (M_Nogood) msg.getContentObject();
+						parseNogoodMsg(nogoodMsg);
+					} catch (UnreadableException e) {
+						e.printStackTrace();
+					}
 				}
 			} else {
 				block();
@@ -597,11 +674,13 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
-				try {
-					M_Ok okMessage = (M_Ok) msg.getContentObject();
-					parseOkMessage(okMessage, msg.getSender());
-				} catch (UnreadableException e) {
-					e.printStackTrace();
+				if (!isReseting) {
+					try {
+						M_Ok okMessage = (M_Ok) msg.getContentObject();
+						parseOkMessage(okMessage, msg.getSender());
+					} catch (UnreadableException e) {
+						e.printStackTrace();
+					}
 				}
 			} else {
 				block();
@@ -660,11 +739,12 @@ public class AirplaneAgent extends Agent {
 		GridPoint myPoint = grid.getLocation(this);
 		GridPoint otherPoint = currentAirport.getGridPoint();
 		double distance = grid.getDistance(myPoint, otherPoint);
-		int minTick = (int) Math.ceil(distance / maxSpeed);
-		int maxTick = fuelRemaining;
+		int minTick = (int) RepastEssentials.GetTickCount() + (int) Math.ceil(distance / maxSpeed);
+		int maxTick = (int) RepastEssentials.GetTickCount() + maxFuel;
 		// initialize domains
 		originalDomain = new TreeSet<Integer>();
 		currentDomain = new TreeSet<Integer>();
+		Logger.printMsg(getAID(), "New domain goes from " + minTick + " to " + maxTick);
 		for (int i = minTick; i <= maxTick; i++) {
 			originalDomain.add(i);
 			currentDomain.add(i);
@@ -702,7 +782,8 @@ public class AirplaneAgent extends Agent {
 				
 				isABTRunning = true;
 				if (disconnectCurrent) {
-					sendDisconnectAirport();
+					sendDisconnectAirportAndAgents();
+					isConnectedToAirport = false;
 				}
 				state++;
 				break;
@@ -712,8 +793,8 @@ public class AirplaneAgent extends Agent {
 					ACLMessage disconnectDoneACLMsg = receive(mtDisconnect);
 					if (disconnectDoneACLMsg != null) {
 						resetState();
-						currentAirport = chooseNewDestiny();
-						Logger.printMsg(getAID(), "Picked new airport");
+						setAirport(chooseNewDestiny());
+						Logger.printMsg(getAID(), "Picked new airport: " + currentAirport.getAID().getLocalName());
 						state++;
 					} else {
 						block();
@@ -764,11 +845,19 @@ public class AirplaneAgent extends Agent {
 				break;
 			case 4:
 				// Connect to other airplanes
-				chooseNewValue();
+				if (!chooseNewValue()) {
+					Logger.printErrMsg(getAID(), "Tou fodido");
+				}
 				if (agentsInAirport.size() == 0) {
 					isABTRunning = false;
 				}
-				M_Connect connectObject = new M_Connect(id, value);
+				M_Connect connectObject = null;
+				try {
+					connectObject = new M_Connect(id, value, currentAirport.getAID());
+				} catch (NullPointerException e) {
+					Logger.printErrMsg(getAID(), id + " " + value + " " + currentAirport.getAID().getLocalName());
+				}
+				
 				ACLMessage connectACL = new ACLMessage(M_Connect.performative);
 				connectACL.setProtocol(M_Connect.protocol);
 				try {
@@ -797,6 +886,34 @@ public class AirplaneAgent extends Agent {
 		
 	}
 	
+	public class NotInAirportListeningBehaviour extends CyclicBehaviour {
+
+		MessageTemplate mt = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_NotInAirport.performative),
+				MessageTemplate.MatchProtocol(M_NotInAirport.protocol));
+		
+		@Override
+		public void action() {
+			ACLMessage aclMsg = receive(mt);
+			if (aclMsg != null) {
+				Logger.printMsg(getAID(), "Received not in airport");
+				M_NotInAirport notInAirportMsg;
+				try {
+					notInAirportMsg = (M_NotInAirport) aclMsg.getContentObject();
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+					return;
+				}
+				int agentNotInAirport = notInAirportMsg.getAgentId();
+				agentsInAirport.remove(agentNotInAirport);
+				checkABTSuccess();
+			} else {
+				block();
+			}
+		}
+		
+	}
+	
 	public class ConnectListeningBehaviour extends CyclicBehaviour {
 		MessageTemplate mt = MessageTemplate.and(
 				MessageTemplate.MatchPerformative(M_Connect.performative),
@@ -808,9 +925,17 @@ public class AirplaneAgent extends Agent {
 				try {
 					isABTRunning = true;
 					M_Connect connectMsg = (M_Connect) msg.getContentObject();
-					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
-					agentView.put(connectMsg.getAgentId(), new AgentViewValue(connectMsg.getValue(), msg.getSender()));
+					AID airportInMsg = connectMsg.getAirport();
 					Logger.printMsg(getAID(), "Received connect from " + connectMsg.getAgentId() + " with value " + connectMsg.getValue());
+					if (!isConnectedToAirport || !currentAirport.getAID().equals(airportInMsg)) {
+						sendNotInAirportMsg(msg.getSender());
+						return;
+					}
+					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
+					if (id > connectMsg.getAgentId()) {
+						agentView.put(connectMsg.getAgentId(), new AgentViewValue(connectMsg.getValue(), msg.getSender()));
+					}
+					
 					if (connectMsg.getAgentId() > id) {
 						if (value != null) {
 							sendOkMessage();
@@ -819,7 +944,7 @@ public class AirplaneAgent extends Agent {
 						}
 						
 					} else {
-						Logger.printMsg(getAID(), "mijar");
+						Logger.printMsg(getAID(), "mijar, tenho menos prioridade");
 						if (value == null || value.intValue() == connectMsg.getValue()) {
 							Logger.printMsg(getAID(), "coco");
 							tryToGetNewValue();
@@ -832,6 +957,20 @@ public class AirplaneAgent extends Agent {
 			} else {
 				block();
 			}
+		}
+		private void sendNotInAirportMsg(AID receiver) {
+			ACLMessage notInAirportACL = new ACLMessage(M_NotInAirport.performative);
+			notInAirportACL.setProtocol(M_NotInAirport.protocol);
+			M_NotInAirport notInAirportMsg = new M_NotInAirport(id);
+			try {
+				notInAirportACL.setContentObject(notInAirportMsg);
+			} catch (IOException e) {
+				e.printStackTrace();
+				return;
+			}
+			notInAirportACL.addReceiver(receiver);
+			send(notInAirportACL);
+			Logger.printMsg(getAID(), "Sent not in airport");
 		}
 	}
 

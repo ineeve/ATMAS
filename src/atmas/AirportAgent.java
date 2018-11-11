@@ -126,6 +126,22 @@ public class AirportAgent extends Agent {
 				reply.addReceiver(aclMessage.getSender());
 				send(reply);
 				Logger.printMsg(getAID(), "Disconnected " + aclMessage.getSender().getLocalName());
+				if (connectedAirplanes.size() > 0) {
+					// Initiate reset protocol
+					Logger.printMsg(getAID(), "Initiating reset protocol");
+					M_Reset resetMsg = new M_Reset(disconnectMsg.getAgentId());
+					ACLMessage aclReset = new ACLMessage(M_Reset.performative);
+					aclReset.setProtocol(M_Reset.protocol);
+					try {
+						aclReset.setContentObject(resetMsg);
+					} catch (IOException e) {
+						e.printStackTrace();
+						return;
+					}
+					aclReset.addReceiver(connectedAirplanes.firstEntry().getValue()); // send reset to top priority agent
+					send(aclReset);
+				}
+				
 			} else {
 				block();
 			}

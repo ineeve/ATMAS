@@ -33,9 +33,9 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	// 1 tick = 5 minutes.
 	static final public int TICKS_PER_HOUR = 12;
 	
-	private int numAirports = 2;
-	private int numAirplanes = 2;
-	private int grid_size = 50;
+	private int numAirports = 5;
+	private int numAirplanes = 10;
+	private int gridSize = 50;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	
 	private Context<Object> context;
@@ -56,13 +56,13 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 				.createContinuousSpaceFactory(null);
 		space = spaceFactory.createContinuousSpace(
 				"space", context, new RandomCartesianAdder<Object>(),
-				new repast.simphony.space.continuous.WrapAroundBorders(), grid_size,
-				grid_size);
+				new repast.simphony.space.continuous.WrapAroundBorders(), gridSize,
+				gridSize);
 
 		GridFactory gridFactory = GridFactoryFinder.createGridFactory(null);
 		grid = gridFactory.createGrid("grid", context,
 				new GridBuilderParameters<Object>(new WrapAroundBorders(),
-						new SimpleGridAdder<Object>(), true, grid_size, grid_size));
+						new SimpleGridAdder<Object>(), true, gridSize, gridSize));
 
 		return super.build(context);
 	}
