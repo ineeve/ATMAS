@@ -89,6 +89,10 @@ public class AirplaneAgent extends Agent {
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 	}
 	
+	public boolean getIsABTRunning() {
+		return isABTRunning;
+	}
+	
 	public int getMaxSpeed() {
 		return maxSpeed;
 	}
@@ -214,7 +218,7 @@ public class AirplaneAgent extends Agent {
 			}
 			break;
 		case FLIGHT: // must travel to and land in airport
-			if (isABTRunning) {
+			if (isABTRunning || value == null) {
 				return;
 			}
 			GridPoint pt = currentAirport.getGridPoint();
@@ -699,66 +703,71 @@ public class AirplaneAgent extends Agent {
 				break;
 			case 2:
 				// Request airplanes to airport
-				Logger.printMsg(getAID(), "Starting Connect Protocol");
-				M_RequestAgents requestAgentsMsg = new M_RequestAgents(id);
-				String replyWith = requestAgentsMsg.getReplyWith();
-				ACLMessage requestAgentsACL = new ACLMessage(M_RequestAgents.performative);
-				requestAgentsACL.setProtocol(M_RequestAgents.protocol);
-				try {
-					requestAgentsACL.setContentObject(requestAgentsMsg);
-				} catch (IOException e1) {
-					e1.printStackTrace();
-					return;
+				if (disconnectCurrent) {
+					Logger.printMsg(getAID(), "Starting Connect Protocol");
+					M_RequestAgents requestAgentsMsg = new M_RequestAgents(id);
+					String replyWith = requestAgentsMsg.getReplyWith();
+					ACLMessage requestAgentsACL = new ACLMessage(M_RequestAgents.performative);
+					requestAgentsACL.setProtocol(M_RequestAgents.protocol);
+					try {
+						requestAgentsACL.setContentObject(requestAgentsMsg);
+					} catch (IOException e1) {
+						e1.printStackTrace();
+						return;
+					}
+					requestAgentsACL.setReplyWith(replyWith);
+					requestAgentsACL.addReceiver(currentAirport.getAID());
+					send(requestAgentsACL);
 				}
-				requestAgentsACL.setReplyWith(replyWith);
-				requestAgentsACL.addReceiver(currentAirport.getAID());
-				send(requestAgentsACL);
-				
 				state++;
 				break;
 			case 3:
 				// Get airplanes in airport
-				ACLMessage agentsACLMsg = receive(mtAgents);
-				if (agentsACLMsg != null) {
-					M_Agents agentsMsg;
-					agentsInAirport.clear();
-					try {
-						agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
-					} catch (UnreadableException e) {
-						e.printStackTrace();
-						return;
+				if (disconnectCurrent) {
+					ACLMessage agentsACLMsg = receive(mtAgents);
+					if (agentsACLMsg != null) {
+						M_Agents agentsMsg;
+						agentsInAirport.clear();
+						try {
+							agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
+						} catch (UnreadableException e) {
+							e.printStackTrace();
+							return;
+						}
+						agentsInAirport.putAll(agentsMsg.getAgents());
+						agentsInAirport.remove(id); // remove self
+						state++;
+					} else {
+						block();
 					}
-					agentsInAirport.putAll(agentsMsg.getAgents());
-					agentsInAirport.remove(id); // remove self
-					state++;
 				} else {
-					block();
+					state++;
 				}
-					break;
-				case 4:
-					// Connect to other airplanes
-					M_Connect connectObject = new M_Connect(id);
-					ACLMessage connectACL = new ACLMessage(M_Connect.performative);
-					connectACL.setProtocol(M_Connect.protocol);
-					try {
-						connectACL.setContentObject(connectObject);
-					} catch (IOException e) {
-						e.printStackTrace();
-						return;
-					}
-					agentsInAirport.forEach( (k,aid) -> {					
-						connectACL.addReceiver(aid);
-					});
-					send(connectACL);
-					state++;
-					break;
-				case 5:
-					tryToGetNewValue();
-					done = true;
-					state++;
-					Logger.printMsg(getAID(), "Ending Connect Protocol (from new airplane side)");
-				default:
+				break;
+			case 4:
+				// Connect to other airplanes
+				M_Connect connectObject = new M_Connect(id);
+				ACLMessage connectACL = new ACLMessage(M_Connect.performative);
+				connectACL.setProtocol(M_Connect.protocol);
+				try {
+					connectACL.setContentObject(connectObject);
+				} catch (IOException e) {
+					e.printStackTrace();
 					return;
+				}
+				agentsInAirport.forEach( (k,aid) -> {					
+					connectACL.addReceiver(aid);
+				});
+				send(connectACL);
+				state++;
+				break;
+			case 5:
+				tryToGetNewValue();
+				done = true;
+				state++;
+				Logger.printMsg(getAID(), "Ending Connect Protocol (from new airplane side)");
+			default:
+				return;
 			}		
 			
 		}
