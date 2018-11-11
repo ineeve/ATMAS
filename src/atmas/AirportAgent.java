@@ -19,6 +19,8 @@ import messages.M_ResetDone;
 import messages.M_Agents;
 import messages.M_Connect;
 import messages.M_Disconnect;
+import messages.M_Ok;
+import messages.M_DisconnectDone;
 import messages.M_RequestAgents;
 import messages.M_Reset;
 import messages.M_Start;
@@ -46,6 +48,7 @@ public class AirportAgent extends Agent {
 	@Override
 	public void setup() {
 		 addBehaviour(new RequestAgentsListeningBehaviour());
+		 addBehaviour(new DisconnectAirplaneBehaviour());
 	}
 	
 	@Override
@@ -87,6 +90,42 @@ public class AirportAgent extends Agent {
 				connectedAirplanes.put(requestMsg.getAgentId(), aclMessage.getSender());
 				Logger.printMsg(getAID(), "Sent reply to request for agents");
 				
+			} else {
+				block();
+			}
+		}
+	}
+	
+	public class DisconnectAirplaneBehaviour extends CyclicBehaviour {
+
+		MessageTemplate mt = MessageTemplate.and(MessageTemplate.MatchPerformative(M_Disconnect.performative),
+				MessageTemplate.MatchProtocol(M_Disconnect.protocol));
+		@Override
+		public void action() {
+			ACLMessage aclMessage = receive(mt);
+			if (aclMessage != null) {
+				// Logger.printMsg(getAID(), "Received airplane disconnect");
+				M_Disconnect disconnectMsg;
+				try {
+					disconnectMsg = (M_Disconnect) aclMessage.getContentObject();
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+					return;
+				}
+				connectedAirplanes.remove(disconnectMsg.getAgentId());
+				ACLMessage reply = aclMessage.createReply();
+				reply.setPerformative(M_DisconnectDone.performative);
+				reply.setProtocol(M_DisconnectDone.protocol);
+				M_DisconnectDone okContent = new M_DisconnectDone();
+				try {
+					reply.setContentObject(okContent);
+				} catch (IOException e) {
+					e.printStackTrace();
+					return;
+				}
+				reply.addReceiver(aclMessage.getSender());
+				send(reply);
+				Logger.printMsg(getAID(), "Disconnected " + aclMessage.getSender().getLocalName());
 			} else {
 				block();
 			}

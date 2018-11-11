@@ -9,7 +9,7 @@ public class M_Ok implements Serializable {
 	private static final long serialVersionUID = 3538676575506526433L;
 	private Integer agentId;
 	private Integer value;
-	public static int perfomative = ACLMessage.PROPOSE;
+	public static int performative = ACLMessage.PROPOSE;
 	public static String protocol = "P_OK";
 	
 	public M_Ok(Integer agentId, Integer value) {
@@ -20,6 +20,7 @@ public class M_Ok implements Serializable {
 	public Integer getAgentId() {
 		return this.agentId;
 	}
+	
 	public Integer getValue() {
 		return this.value;
 	}
