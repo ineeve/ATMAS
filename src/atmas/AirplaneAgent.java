@@ -848,7 +848,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			case 4:
 				// Connect to other airplanes
 				if (!chooseNewValue()) {
-					Logger.printErrMsg(getAID(), "Tou fodido");
+					Logger.printErrMsg(getAID(), "Possible error");
 				}
 				if (agentsInAirport.size() == 0) {
 					isABTRunning = false;
@@ -946,9 +946,8 @@ class ListenResetBehaviour extends CyclicBehaviour {
 						}
 						
 					} else {
-						Logger.printMsg(getAID(), "mijar, tenho menos prioridade");
+						//Logger.printMsg(getAID(), "less priority");
 						if (value == null || value.intValue() == connectMsg.getValue()) {
-							Logger.printMsg(getAID(), "coco");
 							tryToGetNewValue();
 						}
 						checkABTSuccess();
