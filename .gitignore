@@ -2,3 +2,4 @@ bin
 settings
 *.txt
 *.log
+*.log.1
