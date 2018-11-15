@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.Map.Entry;
@@ -53,9 +52,9 @@ public class AirplaneAgent extends Agent {
 	private double startTick;
 	
 	// Grid units / tick.
-	private double minSpeed = 12 / JADELauncher.TICKS_PER_HOUR;
-	private double maxSpeed = 24 / JADELauncher.TICKS_PER_HOUR;
-	private double realSpeed = minSpeed;
+	private final double minSpeed = 3.0 / JADELauncher.TICKS_PER_HOUR;
+	private final double maxSpeed = 5.0 / JADELauncher.TICKS_PER_HOUR;
+	private double realSpeed = maxSpeed;
 	
 	public static final int maxFuel = 14 * JADELauncher.TICKS_PER_HOUR;
 	
@@ -320,7 +319,11 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			break;
 		case FLIGHT: // must travel to and land in airport
 			if (isABTRunning || value == null) {
-				Logger.printMsg(getAID(), "ABT is running or value=null");
+				//Logger.printMsg(getAID(), "ABT is running or value=null");
+				//Logger.printMsg(getAID(), "Agent view size: " + agentView.size() + "; agents In Airport Size: " + agentsInAirport.size());
+				if (agentsInAirport.size() == 0) {
+					tryToGetNewValue();
+				}
 				return;
 			}
 			if (isAtAirport()) {
@@ -333,10 +336,10 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			} else {
 				NdPoint myPoint = space.getLocation(this);
 				GridPoint pt = currentAirport.getGridPoint();
-				NdPoint otherPoint = new NdPoint(pt.getX(), pt.getY());
-				double angle = SpatialMath.calcAngleFor2DMovement(space, myPoint, otherPoint);
+				NdPoint airportPoint = new NdPoint(pt.getX(), pt.getY());
+				double angle = SpatialMath.calcAngleFor2DMovement(space, myPoint, airportPoint);
 				double distance = realSpeed * (RepastEssentials.GetTickCount() - startTick);
-				double realDistance = Math.min(distance, space.getDistance(myPoint, otherPoint)); // do not overshoot
+				double realDistance = Math.min(distance, space.getDistance(myPoint, airportPoint)); // do not overshoot
 				space.moveByVector(this, realDistance, angle, 0);
 				myPoint = space.getLocation(this);
 				grid.moveTo(this, (int) myPoint.getX(), (int) myPoint.getY());
@@ -349,14 +352,14 @@ class ListenResetBehaviour extends CyclicBehaviour {
 
 	private boolean isAtAirport() {
 		GridPoint pt = currentAirport.getGridPoint();
-		Logger.printErrMsg(getAID(), "Distance to airport = " + grid.getDistance(pt, grid.getLocation(this)));
+		//Logger.printErrMsg(getAID(), "Distance to airport = " + grid.getDistance(pt, grid.getLocation(this)));
 		return grid.getDistance(pt, grid.getLocation(this)) <= 1;
 	}
 
 	private void updateLandingDomain() {
 		GridPoint myPoint = grid.getLocation(this);
-		GridPoint otherPoint = currentAirport.getGridPoint();
-		double distance = grid.getDistance(myPoint, otherPoint);
+		GridPoint airportPoint = currentAirport.getGridPoint();
+		double distance = grid.getDistance(myPoint, airportPoint);
 		
 		int fastestEtaTicks = (int) (distance / maxSpeed);
 		
@@ -374,6 +377,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 				it.remove();
 			}
 		}
+		
 	}
 
 	private AirportWrapper chooseNewDestiny() {
@@ -549,7 +553,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		agentView.values().forEach(v -> {
 			currentDomain.remove(v.getValue());
 		});
-		Logger.printErrMsg(getAID(), "currentDomain.size() old | new = " + oldSize + " | " + currentDomain.size());
+		//Logger.printErrMsg(getAID(), "currentDomain.size() old | new = " + oldSize + " | " + currentDomain.size());
 		if (value == null || !currentDomain.contains(value)) {
 			if (chooseNewValue()) {
 				sendOkMessage(); // send ok to lower priority agents
@@ -746,7 +750,8 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		// initialize domains
 		originalDomain = new TreeSet<Integer>();
 		currentDomain = new TreeSet<Integer>();
-		Logger.printMsg(getAID(), "New domain goes from " + minTick + " to " + maxTick);
+		//Logger.printMsg(getAID(), "New domain goes from " + minTick + " to " + maxTick);
+		//Logger.printMsg(getAID(), "Current tick: " + RepastEssentials.GetTickCount());
 		for (int i = minTick; i <= maxTick; i++) {
 			originalDomain.add(i);
 			currentDomain.add(i);
