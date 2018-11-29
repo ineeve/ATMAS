@@ -44,7 +44,7 @@ public class AirplaneAgent extends Agent {
 	private AirportWrapper currentAirport;
 	private boolean isConnectedToAirport;
 	private TreeMap<Integer,AID> agentsInAirport;
-	private Integer value;
+	private Integer chosenTick;
 	private TreeSet<Integer> originalDomain;
 	private TreeSet<Integer> currentDomain;
 	private boolean isReseting;
@@ -139,14 +139,14 @@ public class AirplaneAgent extends Agent {
 	}
 	
 	public Integer getValue() {
-		return value;
+		return chosenTick;
 	}
 	
 	private void resetState() {
 		clearAgentsInAirport();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		currentDomain.addAll(originalDomain);
-		value = null;
+		chosenTick = null;
 	}
 	
 	@Override
@@ -222,6 +222,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 						return;
 					}
 					disconnectedAgentId = resetMsg.getAgentWhoLeft();
+					Logger.printMsg(getAID(), "Received Reset Message asked by airplane" + disconnectedAgentId);
 					if (!sendResetToChild(resetMsg)) {
 						processResetDone(disconnectedAgentId, agentWhoAskedReset);
 					}
@@ -242,10 +243,11 @@ class ListenResetBehaviour extends CyclicBehaviour {
 	}
 	
 	private void processResetDone(int disconnectedAgentId, AID agentWhoAskedReset) {
+		Logger.printMsg(getAID(), "Process Reset Done");
 		agentsInAirport.remove(disconnectedAgentId);
 		agentView.remove(disconnectedAgentId);
 		currentDomain.addAll(originalDomain);
-		value=null;
+		chosenTick=null;
 		isReseting = false;
 		if (agentsInAirport.headMap(id).size() == 0) {
 			tryToGetNewValue();
@@ -298,10 +300,10 @@ class ListenResetBehaviour extends CyclicBehaviour {
 				isABTRunning = true;
 				//resetState();
 				//addBehaviour(new SetDomainBehaviour());
-				addBehaviour(new ConnectToNewAirportBehaviour(false));
-			} else if (isABTRunning || value == null) { // during algorithm
+				addBehaviour(new ConnectToNewAirportBehaviour(false)); // connect to current airport
+			} else if (isABTRunning) { // during algorithm
 				return;
-			} else if (currentTick >= value) { // post-algorithm, takeoff at picked time
+			} else if (currentTick >= chosenTick) { // post-algorithm, takeoff at picked time
 				Logger.printMsg(getAID(), "Taking off");
 				status = AirplaneStatus.BLIND_FLIGHT;
 				// start algorithm in destiny airport
@@ -318,7 +320,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			}
 			break;
 		case FLIGHT: // must travel to and land in airport
-			if (isABTRunning || value == null) {
+			if (isABTRunning || chosenTick == null) {
 				//Logger.printMsg(getAID(), "ABT is running or value=null");
 				//Logger.printMsg(getAID(), "Agent view size: " + agentView.size() + "; agents In Airport Size: " + agentsInAirport.size());
 				if (agentsInAirport.size() == 0) {
@@ -327,7 +329,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 				return;
 			}
 			if (isAtAirport()) {
-				if (currentTick >= value) { // land at picked time
+				if (currentTick >= chosenTick) { // land at picked time
 					Logger.printMsg(getAID(), "Landing");
 					status = AirplaneStatus.PARKED;
 					parkedIdle = true;
@@ -388,7 +390,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		return airports.get(airportIndex);
 	}
 	
-	private void sendDisconnectAirportAndAgents() {
+	private void sendDisconnectToAirport() {
 		Logger.printMsg(getAID(), "Disconnecting from airport");
 		ACLMessage aclDisconnectMessage = new ACLMessage(M_Disconnect.performative);
 		try {
@@ -416,10 +418,10 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		if (currentDomain.size() == 0) return false;
 		//int randomIndex = (int) (Math.random() * currentDomain.size());
 		//do {
-			value = currentDomain.iterator().next();
+			chosenTick = currentDomain.iterator().next();
 		//	randomIndex--;
 		//} while (randomIndex >= 0);
-		Logger.printMsg(getAID(), "updated value to " + value);
+		Logger.printMsg(getAID(), "updated value to " + chosenTick);
 		return true;
 	}
 	
@@ -427,7 +429,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 	 * Send ok message to all lower priority agents
 	 */
 	private void sendOkMessage() {
-		if (value == null) {
+		if (chosenTick == null) {
 			chooseNewValue();
 		}
 		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
@@ -436,7 +438,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			ACLMessage aclOkMessage = new ACLMessage(M_Ok.performative);
 			try {
 				aclOkMessage.setProtocol(M_Ok.protocol);
-				aclOkMessage.setContentObject(new M_Ok(id, value));
+				aclOkMessage.setContentObject(new M_Ok(id, chosenTick));
 			} catch (IOException e) {
 				Logger.printErrMsg(getAID(), e.getMessage());
 				return;
@@ -456,7 +458,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		ACLMessage aclOkMessage = new ACLMessage(M_Ok.performative);
 		try {
 			aclOkMessage.setProtocol(M_Ok.protocol);
-			aclOkMessage.setContentObject(new M_Ok(id, value));
+			aclOkMessage.setContentObject(new M_Ok(id, chosenTick));
 		} catch (IOException e) {
 			Logger.printErrMsg(getAID(), e.getMessage());
 			return;
@@ -487,7 +489,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 	private void checkABTSuccess() {
 		Logger.printMsg(getAID(), "Checking ABT success");
 		HashSet<Integer> h = new HashSet<Integer>();
-		if (value == null) {
+		if (chosenTick == null) {
 			Logger.printErrMsg(getAID(), "Checking ABT success: value=null");
 			return;
 		}
@@ -500,7 +502,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			});
 			return;
 		}
-		h.add(value);
+		h.add(chosenTick);
 		for (AgentViewValue avv : agentView.values()) {
 			Integer agentValue = avv.getValue();
 			if (agentValue == null || h.add(agentValue) == false) {
@@ -521,7 +523,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		@Override
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
-			if (aclMsg != null && value != null) { // ABT hasn't ended if value is null, others will resume once this sends OK with value
+			if (aclMsg != null && chosenTick != null) { // ABT hasn't ended if value is null, others will resume once this sends OK with value
 				Logger.printMsg(getAID(), "Received ABT End");
 				isABTRunning = false;
 			} else {
@@ -554,7 +556,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			currentDomain.remove(v.getValue());
 		});
 		//Logger.printErrMsg(getAID(), "currentDomain.size() old | new = " + oldSize + " | " + currentDomain.size());
-		if (value == null || !currentDomain.contains(value)) {
+		if (chosenTick == null || !currentDomain.contains(chosenTick)) {
 			if (chooseNewValue()) {
 				sendOkMessage(); // send ok to lower priority agents
 			} else {
@@ -632,14 +634,14 @@ class ListenResetBehaviour extends CyclicBehaviour {
 				myNogood = nogood.getValue();
 			}
 		}
-		if (!myNogood.getValue().equals(value)) {
-			Logger.printMsg(getAID(), "Ignoring nogood, reason: " + myNogood.getValue() + " " + value);
+		if (!myNogood.getValue().equals(chosenTick)) {
+			Logger.printMsg(getAID(), "Ignoring nogood, reason: " + myNogood.getValue() + " " + chosenTick);
 			return;
 		}
 		
 		//Logger.printMsg(getAID(), "nogood consistent with agent view");
 		// set my value to null
-		value = null;
+		chosenTick = null;
 		// update currentDomain
 		currentDomain.remove(myNogood.getValue());
 		// try to get new value
@@ -767,7 +769,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		
 		boolean done = false;
 		int state = 0;
-		MessageTemplate mtDisconnect = MessageTemplate.and(MessageTemplate.MatchPerformative(M_DisconnectDone.performative),
+		MessageTemplate mtDisconnectDone = MessageTemplate.and(MessageTemplate.MatchPerformative(M_DisconnectDone.performative),
 				MessageTemplate.MatchProtocol(M_DisconnectDone.protocol));
 		MessageTemplate mtAgents = MessageTemplate.and(MessageTemplate.MatchPerformative(M_Agents.performative),
 				MessageTemplate.MatchProtocol(M_Agents.protocol));
@@ -789,7 +791,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 				
 				isABTRunning = true;
 				if (disconnectCurrent) {
-					sendDisconnectAirportAndAgents();
+					sendDisconnectToAirport();
 					isConnectedToAirport = false;
 				}
 				state++;
@@ -797,7 +799,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			case 1: // Confirm disconnect and pick new one, set new domains
 				
 				if (disconnectCurrent) {
-					ACLMessage disconnectDoneACLMsg = receive(mtDisconnect);
+					ACLMessage disconnectDoneACLMsg = receive(mtDisconnectDone);
 					if (disconnectDoneACLMsg != null) {
 						resetState();
 						setAirport(chooseNewDestiny());
@@ -860,9 +862,9 @@ class ListenResetBehaviour extends CyclicBehaviour {
 				}
 				M_Connect connectObject = null;
 				try {
-					connectObject = new M_Connect(id, value, currentAirport.getAID());
+					connectObject = new M_Connect(id, chosenTick, currentAirport.getAID());
 				} catch (NullPointerException e) {
-					Logger.printErrMsg(getAID(), id + " " + value + " " + currentAirport.getAID().getLocalName());
+					Logger.printErrMsg(getAID(), id + " " + chosenTick + " " + currentAirport.getAID().getLocalName());
 				}
 				
 				ACLMessage connectACL = new ACLMessage(M_Connect.performative);
@@ -944,7 +946,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 					}
 					
 					if (connectMsg.getAgentId() > id) {
-						if (value != null) {
+						if (chosenTick != null) {
 							sendOkMessage();
 						} else {
 							tryToGetNewValue();
@@ -952,7 +954,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 						
 					} else {
 						//Logger.printMsg(getAID(), "less priority");
-						if (value == null || value.intValue() == connectMsg.getValue()) {
+						if (chosenTick == null || chosenTick.intValue() == connectMsg.getValue()) {
 							tryToGetNewValue();
 						}
 						checkABTSuccess();
