@@ -52,13 +52,13 @@ public class AirplaneAgent extends Agent {
 	private double startTick;
 	
 	// Grid units / tick.
-	private final double minSpeed = 3.0 / JADELauncher.TICKS_PER_HOUR;
-	private final double maxSpeed = 5.0 / JADELauncher.TICKS_PER_HOUR;
+	private final double minSpeed = 1.0 / JADELauncher.TICKS_PER_HOUR;
+	private final double maxSpeed = 3.0 / JADELauncher.TICKS_PER_HOUR;
 	private double realSpeed = maxSpeed;
 	
 	public static final int maxFuel = 14 * JADELauncher.TICKS_PER_HOUR;
 	
-	private AirplaneStatus status = AirplaneStatus.PARKED;
+	private AirplaneStatus status;
 	private boolean parkedIdle = true;
 	
 	private double emergencyChance;
@@ -79,17 +79,13 @@ public class AirplaneAgent extends Agent {
 		this.id = id;
 		this.airports = airports;
 		setAirport(origin);
+		status = AirplaneStatus.PARKED;
 		originalDomain = new TreeSet<Integer>();
 		currentDomain = new TreeSet<Integer>();
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
 		this.isReseting = false;
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
-	}
-	
-	public void clearAgentsInAirport() {
-		agentsInAirport.clear();
-		Logger.printMsg(getAID(), "Clear Agents In Airport");
 	}
 	
 	public boolean getIsABTRunning() {
@@ -138,14 +134,15 @@ public class AirplaneAgent extends Agent {
 		}
 	}
 	
-	public Integer getValue() {
+	public Integer getChosenTick() {
 		return chosenTick;
 	}
 	
 	private void resetState() {
-		clearAgentsInAirport();
-		agentView = new TreeMap<Integer, AgentViewValue>();
-		currentDomain.addAll(originalDomain);
+		agentsInAirport.clear();
+		agentView.clear();
+		originalDomain.clear();
+		currentDomain.clear();
 		chosenTick = null;
 	}
 	
@@ -153,112 +150,64 @@ public class AirplaneAgent extends Agent {
 	public void setup() {
 		addBehaviour(new OkListeningBehaviour());
 		addBehaviour(new NogoodListeningBehaviour());
+		addBehaviour(new ListenForAirplanesInAirport());
 		addBehaviour(new ConnectListeningBehaviour());
 		addBehaviour(new StopBehaviour());
 		addBehaviour(new ListenABTEnd());
 		addBehaviour(new NotInAirportListeningBehaviour());
-		addBehaviour(new ListenResetBehaviour());
+		addBehaviour(new ListenDisconnectBehaviour());
 	}
 	
-	private void sendResetDone(AID higherPriorityAgent) {
-		ACLMessage resetDoneMessage = new ACLMessage(M_ResetDone.performative);
-		resetDoneMessage.setProtocol(M_ResetDone.protocol);
-		resetDoneMessage.addReceiver(higherPriorityAgent);
-		send(resetDoneMessage);
-		Logger.printMsg(getAID(), "Sent reset_done to " + higherPriorityAgent.getLocalName());
-	}
 	
-	/**
-	 * 
-	 * @return True if reset was send to child, false if there was no child
-	 */
-	private boolean sendResetToChild(M_Reset resetContent) {
-		Entry<Integer, AID> childEntry = agentsInAirport.ceilingEntry(id + 1);
-		if (childEntry != null) {
-			AID child = childEntry.getValue();
-			if (child != null) {
-				ACLMessage msg = new ACLMessage(M_Reset.performative);
-				msg.setProtocol(M_Reset.protocol);
-				try {
-					msg.setContentObject(resetContent);
-				} catch (IOException e) {
-					e.printStackTrace();
-					return false;
-				}
-				msg.addReceiver(child);
-				send(msg);
-				return true;
-			}
-		}
-		return false;
+	public class ListenDisconnectBehaviour extends CyclicBehaviour {
 		
-	}
-	
-class ListenResetBehaviour extends CyclicBehaviour {
-		
-		MessageTemplate mtReset = MessageTemplate.and(
-				MessageTemplate.MatchPerformative(M_Reset.performative),
-				MessageTemplate.MatchProtocol(M_Reset.protocol));
-		
-		MessageTemplate mtResetDone = MessageTemplate.and(
-				MessageTemplate.MatchPerformative(M_ResetDone.performative),
-				MessageTemplate.MatchProtocol(M_ResetDone.protocol));
-	
-		AID agentWhoAskedReset;
-		int disconnectedAgentId;
+		MessageTemplate mtDisconnect = MessageTemplate.and(
+				MessageTemplate.MatchPerformative(M_Disconnect.performative),
+				MessageTemplate.MatchProtocol(M_Disconnect.protocol));
 		
 		@Override
 		public void action() {
-			if (!isReseting) {
-				ACLMessage resetACLMsg = receive(mtReset);
-				if (resetACLMsg != null) {
-					isReseting = true;
-					M_Reset resetMsg;
-					agentWhoAskedReset = resetACLMsg.getSender();
-					 try {
-						resetMsg = (M_Reset) resetACLMsg.getContentObject();
-					} catch (UnreadableException e) {
-						e.printStackTrace();
+			
+			ACLMessage disconnectACLMsg = receive(mtDisconnect);
+			if (disconnectACLMsg != null) {
+				M_Disconnect disconnectMsg;
+				 try {
+					disconnectMsg = (M_Disconnect) disconnectACLMsg.getContentObject();
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+					return;
+				}
+				processDisconnect(disconnectMsg.getAgentId(), disconnectMsg.getAirport());
+			} else {
+				block();
+			}
+		}
+	}
+
+	private void processDisconnect(int disconnectedAgentId, AID airport) {
+		
+		if (airport.equals(currentAirport.getAID())) {
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Received Disconnect by airplane" + disconnectedAgentId);
+			if (agentsInAirport.containsKey(disconnectedAgentId)) {
+				agentsInAirport.remove(disconnectedAgentId);
+				AgentViewValue prevValue = agentView.remove(disconnectedAgentId);
+				if (prevValue != null) {
+					boolean isAdded = addAgentPrevValueToDomain(prevValue);
+					if (isAdded) {
+						tryToChooseNewTick();
 						return;
 					}
-					disconnectedAgentId = resetMsg.getAgentWhoLeft();
-					Logger.printMsg(getAID(), "Received Reset Message asked by airplane" + disconnectedAgentId);
-					if (!sendResetToChild(resetMsg)) {
-						processResetDone(disconnectedAgentId, agentWhoAskedReset);
-					}
-				} else {
-					block();
 				}
-			}
-			if (isReseting) {
-				// reset was received and sent, now wait for response
-				ACLMessage resetDoneMsg = receive(mtResetDone);
-				if (resetDoneMsg != null) {
-					processResetDone(disconnectedAgentId, agentWhoAskedReset);
-				} else {
-					block();
-				}
+				checkABTSuccess();
 			}
 		}
 	}
 	
-	private void processResetDone(int disconnectedAgentId, AID agentWhoAskedReset) {
-		Logger.printMsg(getAID(), "Process Reset Done");
-		agentsInAirport.remove(disconnectedAgentId);
-		agentView.remove(disconnectedAgentId);
-		currentDomain.addAll(originalDomain);
-		chosenTick=null;
-		isReseting = false;
-		if (agentsInAirport.headMap(id).size() == 0) {
-			tryToGetNewValue();
-		} else {
-			sendResetDone(agentWhoAskedReset);
-		}
-	}
 	
 	@Override
 	public void takeDown() {
-		 Logger.printErrMsg(getAID(),"takedown");
+		 Logger.printErrMsg(getAID(), currentAirport.getAID(),"takedown");
+		 System.exit(1);
 	}
 	
 	/**
@@ -276,7 +225,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 	 * Airplane will try to land on the closest airport with maximum priority.
 	 */
 	private void activateEmergency() {
-		Logger.printMsg(getAID(), "EMERGENCY - FINDING CLOSEST AIRPORT");
+		Logger.printErrMsg(getAID(), currentAirport.getAID(), "EMERGENCY - FINDING CLOSEST AIRPORT");
 		// find closest airport
 		setAirport(AirportLocator.getClosest(space, space.getLocation(this), airports));
 		// set emergency priority (random avoids emergency collisions)
@@ -285,30 +234,30 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		// TODO: Do not reconnect when it already is the closest.
 		//addBehaviour(new SetDomainBehaviour());
 		isABTRunning = true;
-		addBehaviour(new ConnectToNewAirportBehaviour());
+		Logger.printErrMsg(getAID(), currentAirport.getAID(), "Emergency");
+		addBehaviour(new ConnectToNewAirportBehaviour(true));
 		
 		// regular scheduled move function will then land it
 	}
 	
-	@ScheduledMethod(start = 1, interval = 1)
+	@ScheduledMethod(start = 10, interval = 1)
 	public void moveTowardsAirport() {
 		double currentTick = RepastEssentials.GetTickCount();
 		switch (status) {
 		case PARKED: // must schedule and do takeoff
 			if (parkedIdle) { // pre-algorithm
 				parkedIdle = false;
-				isABTRunning = true;
-				//resetState();
-				//addBehaviour(new SetDomainBehaviour());
 				addBehaviour(new ConnectToNewAirportBehaviour(false)); // connect to current airport
 			} else if (isABTRunning) { // during algorithm
 				return;
+			} else if (chosenTick == null) {
+				isABTRunning = true;
 			} else if (currentTick >= chosenTick) { // post-algorithm, takeoff at picked time
-				Logger.printMsg(getAID(), "Taking off");
 				status = AirplaneStatus.BLIND_FLIGHT;
+				Logger.printMsg(getAID(), currentAirport.getAID(), "Taking off at " + currentTick);
 				// start algorithm in destiny airport
 				isABTRunning = true;
-				addBehaviour(new ConnectToNewAirportBehaviour());
+				addBehaviour(new ConnectToNewAirportBehaviour(true));
 				startTick = RepastEssentials.GetTickCount();
 			}
 			break;
@@ -321,20 +270,14 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			break;
 		case FLIGHT: // must travel to and land in airport
 			if (isABTRunning || chosenTick == null) {
-				//Logger.printMsg(getAID(), "ABT is running or value=null");
-				//Logger.printMsg(getAID(), "Agent view size: " + agentView.size() + "; agents In Airport Size: " + agentsInAirport.size());
-				if (agentsInAirport.size() == 0) {
-					tryToGetNewValue();
-				}
 				return;
 			}
 			if (isAtAirport()) {
-				if (currentTick >= chosenTick) { // land at picked time
-					Logger.printMsg(getAID(), "Landing");
-					status = AirplaneStatus.PARKED;
-					parkedIdle = true;
-					id = originalId;
-				}
+				// land at picked time
+				Logger.printMsg(getAID(), currentAirport.getAID(), "Landing at " + chosenTick);
+				status = AirplaneStatus.PARKED;
+				parkedIdle = true;
+				id = originalId;
 			} else {
 				NdPoint myPoint = space.getLocation(this);
 				GridPoint pt = currentAirport.getGridPoint();
@@ -354,7 +297,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 
 	private boolean isAtAirport() {
 		GridPoint pt = currentAirport.getGridPoint();
-		//Logger.printErrMsg(getAID(), "Distance to airport = " + grid.getDistance(pt, grid.getLocation(this)));
+		//Logger.printErrMsg(getAID(), currentAirport.getAID(), "Distance to airport = " + grid.getDistance(pt, grid.getLocation(this)));
 		return grid.getDistance(pt, grid.getLocation(this)) <= 1;
 	}
 
@@ -362,7 +305,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		GridPoint myPoint = grid.getLocation(this);
 		GridPoint airportPoint = currentAirport.getGridPoint();
 		double distance = grid.getDistance(myPoint, airportPoint);
-		
+		/*
 		int fastestEtaTicks = (int) (distance / maxSpeed);
 		
 		int minTick = (int)RepastEssentials.GetTickCount() +  fastestEtaTicks;
@@ -379,6 +322,9 @@ class ListenResetBehaviour extends CyclicBehaviour {
 				it.remove();
 			}
 		}
+		if (chosenTick == null || !currentDomain.contains(chosenTick)) {
+			tryToChooseNewTick();
+		}*/
 		
 	}
 
@@ -390,18 +336,22 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		return airports.get(airportIndex);
 	}
 	
-	private void sendDisconnectToAirport() {
-		Logger.printMsg(getAID(), "Disconnecting from airport");
+	private void disconnectFromAirport() {
+		Logger.printMsg(getAID(), currentAirport.getAID(), "Disconnecting from airport");
 		ACLMessage aclDisconnectMessage = new ACLMessage(M_Disconnect.performative);
 		try {
 			aclDisconnectMessage.setProtocol(M_Disconnect.protocol);
-			aclDisconnectMessage.setContentObject(new M_Disconnect(id));
+			aclDisconnectMessage.setContentObject(new M_Disconnect(id, currentAirport.getAID()));
 		} catch (IOException e) {
-			Logger.printErrMsg(getAID(), e.getMessage());
+			Logger.printErrMsg(getAID(), currentAirport.getAID(), e.getMessage());
 			return;
 		}
 		aclDisconnectMessage.addReceiver(currentAirport.getAID());
+		agentsInAirport.forEach( (airplaneID, airplaneAID) -> {
+			aclDisconnectMessage.addReceiver(airplaneAID);
+		});
 		send(aclDisconnectMessage);
+		isConnectedToAirport = false;
 	}
 
 	public int getId() {
@@ -421,7 +371,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			chosenTick = currentDomain.iterator().next();
 		//	randomIndex--;
 		//} while (randomIndex >= 0);
-		Logger.printMsg(getAID(), "updated value to " + chosenTick);
+		Logger.printMsg(getAID(), currentAirport.getAID(), "updated value to " + chosenTick);
 		return true;
 	}
 	
@@ -434,19 +384,20 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		}
 		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
 		if (lowerPriorityAgents != null && lowerPriorityAgents.size() > 0) {
-			//Logger.printMsg(getAID(), "Sending ok " + value + " to " + lowerAgents.size() + " agents");
+			//Logger.printMsg(getAID(), currentAirport.getAID(), "Sending ok " + value + " to " + lowerAgents.size() + " agents");
 			ACLMessage aclOkMessage = new ACLMessage(M_Ok.performative);
 			try {
 				aclOkMessage.setProtocol(M_Ok.protocol);
 				aclOkMessage.setContentObject(new M_Ok(id, chosenTick));
 			} catch (IOException e) {
-				Logger.printErrMsg(getAID(), e.getMessage());
+				Logger.printErrMsg(getAID(), currentAirport.getAID(), e.getMessage());
 				return;
 			}
 			
 			for (AID aid : lowerPriorityAgents.values()) {
 				aclOkMessage.addReceiver(aid);
 			}
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Sending ok with tick " + chosenTick);
 			send(aclOkMessage);
 		}
 	}
@@ -460,45 +411,56 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			aclOkMessage.setProtocol(M_Ok.protocol);
 			aclOkMessage.setContentObject(new M_Ok(id, chosenTick));
 		} catch (IOException e) {
-			Logger.printErrMsg(getAID(), e.getMessage());
+			Logger.printErrMsg(getAID(), currentAirport.getAID(), e.getMessage());
 			return;
 		}
 		aclOkMessage.addReceiver(agentAID);
 		send(aclOkMessage);
 	}
 	
-	public void parseOkMessage(M_Ok okMessage, AID sender) {
-		isABTRunning = true;
-		AgentViewValue avv = new AgentViewValue(okMessage.getValue(), sender);
-		Logger.printMsg(getAID(), "Received ok " + okMessage.getValue() + " from " + sender.getLocalName());
-		// check if new value is compatible with other agent values in the agentview
-		AgentViewValue prevValue = agentView.put(okMessage.getAgentId(), avv);
-		if (prevValue != null) {
-			if (!agentView.containsValue(prevValue) && originalDomain.contains(prevValue.getValue())) { //there could be another agent which had the previous value
+	private boolean addAgentPrevValueToDomain(AgentViewValue prevValue) {
+		if (!agentView.containsValue(prevValue) && originalDomain.contains(prevValue.getValue())) { //there could be another agent which had the previous value
+			if (!currentDomain.contains(prevValue.getValue())) {
 				currentDomain.add(prevValue.getValue()); //Adds the previous value of the agent to this agent available domain
+				return true;
 			}
 		}
-		tryToGetNewValue();
-		if (agentsInAirport.tailMap(id+1).size() == 0) {
-			// if I am the element with less priority, check for ABT end (success).
-			
-			checkABTSuccess();
+		return false;
+	}
+	
+	public void parseOkMessage(M_Ok okMessage, AID sender) {
+		if (agentsInAirport.containsValue(sender)) {
+			isABTRunning = true;
+			AgentViewValue avv = new AgentViewValue(okMessage.getValue(), sender);
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Received ok " + okMessage.getValue() + " from " + sender.getLocalName());
+			// check if new value is compatible with other agent values in the agentview
+			AgentViewValue prevValue = agentView.put(okMessage.getAgentId(), avv);
+			if (prevValue != null) {
+				addAgentPrevValueToDomain(prevValue);
+			}
+			tryToChooseNewTick();
+			if (agentsInAirport.tailMap(id+1).size() == 0) {
+				// if I am the element with less priority, check for ABT end (success).
+				checkABTSuccess();
+			}
+		} else {
+			Logger.printErrMsg(getAID(), "Received Ok from agent that is not in airport");
 		}
 	}
 	
 	private void checkABTSuccess() {
-		Logger.printMsg(getAID(), "Checking ABT success");
+		Logger.printMsg(getAID(), currentAirport.getAID(), "Checking ABT success");
 		HashSet<Integer> h = new HashSet<Integer>();
 		if (chosenTick == null) {
-			Logger.printErrMsg(getAID(), "Checking ABT success: value=null");
+			tryToChooseNewTick();
 			return;
 		}
 		if (agentView.size() != agentsInAirport.size()) {
 			if (agentView.size() > agentsInAirport.size()) {
-				Logger.printErrMsg(getAID(), "Checking ABT success: agentViewSize != agentsInAirportSize: " + agentView.size() + " != " + agentsInAirport.size());
+				Logger.printErrMsg(getAID(), currentAirport.getAID(), "Checking ABT success: agentViewSize != agentsInAirportSize: " + agentView.size() + " != " + agentsInAirport.size());
 			}
 			agentView.forEach((k,avv)->{
-				Logger.printMsg(getAID(), k + "->" + avv.getValue());
+				Logger.printMsg(getAID(), currentAirport.getAID(), k + "->" + avv.getValue());
 			});
 			return;
 		}
@@ -506,13 +468,13 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		for (AgentViewValue avv : agentView.values()) {
 			Integer agentValue = avv.getValue();
 			if (agentValue == null || h.add(agentValue) == false) {
-				Logger.printErrMsg(getAID(), "Checking ABT success: duplicated value in agentView");
+				Logger.printErrMsg(getAID(), currentAirport.getAID(), "Checking ABT success: duplicated value in agentView");
 				return; // ABT has not ended yet
 			}
 		}
 		isABTRunning = false;
 		addBehaviour(new InformABTEnd());
-		Logger.printMsg(getAID(), "ABT ended");
+		Logger.printMsg(getAID(), currentAirport.getAID(), "ABT ended");
 	}
 	
 	
@@ -524,7 +486,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
 			if (aclMsg != null && chosenTick != null) { // ABT hasn't ended if value is null, others will resume once this sends OK with value
-				Logger.printMsg(getAID(), "Received ABT End");
+				Logger.printMsg(getAID(), currentAirport.getAID(), "Received ABT End");
 				isABTRunning = false;
 			} else {
 				block();
@@ -538,24 +500,23 @@ class ListenResetBehaviour extends CyclicBehaviour {
 
 		@Override
 		public void action() {
-			ACLMessage aclMsg = new ACLMessage(M_ABTEnd.performative);
-			aclMsg.setProtocol(M_ABTEnd.protocol);
-			for (AID airplaneAID : agentsInAirport.values()) {
-				aclMsg.addReceiver(airplaneAID);
+			if (agentsInAirport.size() > 0) {
+				ACLMessage aclMsg = new ACLMessage(M_ABTEnd.performative);
+				aclMsg.setProtocol(M_ABTEnd.protocol);
+				for (AID airplaneAID : agentsInAirport.values()) {
+					aclMsg.addReceiver(airplaneAID);
+				}
+				send(aclMsg);
 			}
-			send(aclMsg);	
 		}
-		
 	}
 	
-	private void tryToGetNewValue() {
+	private void tryToChooseNewTick() {
 		// Remove from current domain all values that were defined by agents with bigger or equal priority to the sender of this ok message
-
-		int oldSize = currentDomain.size();
 		agentView.values().forEach(v -> {
 			currentDomain.remove(v.getValue());
 		});
-		//Logger.printErrMsg(getAID(), "currentDomain.size() old | new = " + oldSize + " | " + currentDomain.size());
+		//Logger.printErrMsg(getAID(), currentAirport.getAID(), "currentDomain.size() old | new = " + oldSize + " | " + currentDomain.size());
 		if (chosenTick == null || !currentDomain.contains(chosenTick)) {
 			if (chooseNewValue()) {
 				sendOkMessage(); // send ok to lower priority agents
@@ -570,14 +531,14 @@ class ListenResetBehaviour extends CyclicBehaviour {
 	
 	private void backtrack() {
 		// current agent view is a nogood
-		Logger.printErrMsg(getAID(), "Generating Nogood");
+		Logger.printErrMsg(getAID(), currentAirport.getAID(), "Generating Nogood");
 		TreeMap<Integer, AID> lowerPriorityAgents = getLowerPriorityAgents();
 		if (agentView.size() == 0) { // agentView.size == 0 means that I am the agent with most priority
 			// TERMINATE, Broadcast stop message
-			Logger.printMsg(getAID(), "No solution found");
+			Logger.printMsg(getAID(), currentAirport.getAID(), "No solution found");
 			ACLMessage aclStopMsg = new ACLMessage(M_Stop.performative);
 			aclStopMsg.setProtocol(M_Stop.protocol);
-			Logger.printMsg(getAID(), "sending stop to " + lowerPriorityAgents.size() + " agents");
+			Logger.printMsg(getAID(), currentAirport.getAID(), "sending stop to " + lowerPriorityAgents.size() + " agents");
 			for(AID agent : lowerPriorityAgents.values()) {
 				aclStopMsg.addReceiver(agent);
 			}
@@ -619,14 +580,14 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		}
 		nogoodACLMsg.addReceiver(receiver);
 		send(nogoodACLMsg);
-		//Logger.printMsg(getAID(), "Sent nogood to " + receiver.getLocalName());
+		//Logger.printMsg(getAID(), currentAirport.getAID(), "Sent nogood to " + receiver.getLocalName());
 	}
 	
 	private void parseNogoodMsg(M_Nogood nogoodMsg) {
 		isABTRunning = true;
 		// check if nogood is consistent with agentview
 		// this is an optimization to prevent unnecessary messages
-		Logger.printMsg(getAID(), "Received nogood");
+		Logger.printMsg(getAID(), currentAirport.getAID(), "Received nogood");
 		HashSet<Nogood> nogoods = nogoodMsg.getNogoods();
 		AgentViewValue myNogood = null;
 		for (Nogood nogood : nogoods) {
@@ -635,17 +596,17 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			}
 		}
 		if (!myNogood.getValue().equals(chosenTick)) {
-			Logger.printMsg(getAID(), "Ignoring nogood, reason: " + myNogood.getValue() + " " + chosenTick);
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Ignoring nogood, reason: " + myNogood.getValue() + " " + chosenTick);
 			return;
 		}
 		
-		//Logger.printMsg(getAID(), "nogood consistent with agent view");
+		//Logger.printMsg(getAID(), currentAirport.getAID(), "nogood consistent with agent view");
 		// set my value to null
 		chosenTick = null;
 		// update currentDomain
 		currentDomain.remove(myNogood.getValue());
 		// try to get new value
-		tryToGetNewValue();
+		tryToChooseNewTick();
 		// if I am not the most priority Agent, add myNogood again to domain		
 	}
 	
@@ -660,7 +621,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
 				if (!isReseting) {
-					Logger.printMsg(getAID(), "Received Nogood");
+					Logger.printMsg(getAID(), currentAirport.getAID(), "Received Nogood");
 					try {
 						M_Nogood nogoodMsg = (M_Nogood) msg.getContentObject();
 						parseNogoodMsg(nogoodMsg);
@@ -714,34 +675,6 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			
 		}		
 	}
-		
-	
-//	class SetDomainBehaviour extends Behaviour {
-//
-//		boolean done = false;
-//		@Override
-//		public void action() {
-//			GridPoint myPoint = grid.getLocation(myAgent);
-//			GridPoint otherPoint = currentAirport.getGridPoint();
-//			double distance = grid.getDistance(myPoint, otherPoint);
-//			int minTick = (int) Math.ceil(distance / maxSpeed);
-//			int maxTick = fuelRemaining;
-//			// initialize domains
-//			originalDomain = new TreeSet<Integer>();
-//			currentDomain = new TreeSet<Integer>();
-//			for (int i = minTick; i <= maxTick; i++) {
-//				originalDomain.add(i);
-//				currentDomain.add(i);
-//			}
-//			done = true;
-//		}
-//
-//		@Override
-//		public boolean done() {
-//			return done;
-//		}
-//		
-//	}
 	
 	private void setNewDomains() {
 		GridPoint myPoint = grid.getLocation(this);
@@ -752,15 +685,71 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		// initialize domains
 		originalDomain = new TreeSet<Integer>();
 		currentDomain = new TreeSet<Integer>();
-		//Logger.printMsg(getAID(), "New domain goes from " + minTick + " to " + maxTick);
-		//Logger.printMsg(getAID(), "Current tick: " + RepastEssentials.GetTickCount());
+		Logger.printMsg(getAID(), currentAirport.getAID(), "New domain goes from " + minTick + " to " + maxTick);
 		for (int i = minTick; i <= maxTick; i++) {
 			originalDomain.add(i);
 			currentDomain.add(i);
 		}
+		chosenTick = null;
+		isABTRunning = true;
+		tryToChooseNewTick();
 	}
 	
-	class ConnectToNewAirportBehaviour extends Behaviour {
+	public void connectToOtherAirplanes() {
+		if (agentsInAirport.size() == 0) {
+			isABTRunning = false;
+		}
+		M_Connect connectObject = null;
+		try {
+			connectObject = new M_Connect(id, chosenTick, currentAirport.getAID());
+		} catch (NullPointerException e) {
+			Logger.printErrMsg(getAID(), currentAirport.getAID(), id + " " + chosenTick + " " + currentAirport.getAID().getLocalName());
+		}
+		
+		ACLMessage connectACL = new ACLMessage(M_Connect.performative);
+		connectACL.setProtocol(M_Connect.protocol);
+		try {
+			connectACL.setContentObject(connectObject);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
+		agentsInAirport.forEach( (k,aid) -> {					
+			connectACL.addReceiver(aid);
+		});
+		send(connectACL);
+	}
+	
+	public class ListenForAirplanesInAirport extends CyclicBehaviour {
+
+		MessageTemplate mtAgents = MessageTemplate.and(MessageTemplate.MatchPerformative(M_Agents.performative),
+				MessageTemplate.MatchProtocol(M_Agents.protocol));
+		
+		@Override
+		public void action() {
+			ACLMessage agentsACLMsg = receive(mtAgents);
+			if (agentsACLMsg != null) {
+				M_Agents agentsMsg;
+				try {
+					agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
+				} catch (UnreadableException e) {
+					e.printStackTrace();
+					return;
+				}
+				agentsInAirport.clear();
+				agentsInAirport.putAll(agentsMsg.getAgents());
+				Logger.printMsg(getAID(),currentAirport.getAID(), "Received agents in airport, count: " + agentsMsg.getAgents().size());
+				connectToOtherAirplanes();
+			} else {
+				block();
+			}
+			
+		}
+		
+	}
+	
+	
+	class ConnectToNewAirportBehaviour extends OneShotBehaviour {
 
 		/**
 		 * 
@@ -769,130 +758,55 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		
 		boolean done = false;
 		int state = 0;
-		MessageTemplate mtDisconnectDone = MessageTemplate.and(MessageTemplate.MatchPerformative(M_DisconnectDone.performative),
-				MessageTemplate.MatchProtocol(M_DisconnectDone.protocol));
-		MessageTemplate mtAgents = MessageTemplate.and(MessageTemplate.MatchPerformative(M_Agents.performative),
-				MessageTemplate.MatchProtocol(M_Agents.protocol));
+		
+		
 
-		private boolean disconnectCurrent = true;
+		private boolean disconnectCurrent;
 
 		public ConnectToNewAirportBehaviour() {
-			Logger.printMsg(getAID(), "Created Connect to new airport behaviour");
+			disconnectCurrent = true;
 		}
 		public ConnectToNewAirportBehaviour(boolean disconnectCurrent) {
 			this.disconnectCurrent = disconnectCurrent;
-			Logger.printMsg(getAID(), "Created Connect to new airport behaviour. Disconnecting from current: " + disconnectCurrent);
 		}
 		
 		@Override
 		public void action() {
-			switch (state) {
-			case 0: // Request disconnect from current
-				
-				isABTRunning = true;
-				if (disconnectCurrent) {
-					sendDisconnectToAirport();
-					isConnectedToAirport = false;
-				}
-				state++;
-				break;
-			case 1: // Confirm disconnect and pick new one, set new domains
-				
-				if (disconnectCurrent) {
-					ACLMessage disconnectDoneACLMsg = receive(mtDisconnectDone);
-					if (disconnectDoneACLMsg != null) {
-						resetState();
-						setAirport(chooseNewDestiny());
-						Logger.printMsg(getAID(), "Picked new airport: " + currentAirport.getAID().getLocalName());
-						state++;
-					} else {
-						block();
-					}
-				} else {
-					state++;
-				}
+			isABTRunning = true;
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Created Connect to new airport behaviour. Disconnecting from current: " + disconnectCurrent);
+			if (disconnectCurrent) {
+				disconnectFromAirport();
+				pickNewAirport();
+				requestAirplanesInAirport();
+			} else {
 				setNewDomains();
-				break;
-			case 2:
-				
-				// Request airplanes to airport
-
-				Logger.printMsg(getAID(), "Starting Connect Protocol");
-				M_RequestAgents requestAgentsMsg = new M_RequestAgents(id);
-				String replyWith = requestAgentsMsg.getReplyWith();
-				ACLMessage requestAgentsACL = new ACLMessage(M_RequestAgents.performative);
-				requestAgentsACL.setProtocol(M_RequestAgents.protocol);
-				try {
-					requestAgentsACL.setContentObject(requestAgentsMsg);
-				} catch (IOException e1) {
-					e1.printStackTrace();
-					return;
-				}
-				requestAgentsACL.setReplyWith(replyWith);
-				requestAgentsACL.addReceiver(currentAirport.getAID());
-				send(requestAgentsACL);
-				state++;
-				break;
-			case 3:
-				// Get airplanes in airport
-				
-				ACLMessage agentsACLMsg = receive(mtAgents);
-				if (agentsACLMsg != null) {
-					M_Agents agentsMsg;
-					try {
-						agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
-					} catch (UnreadableException e) {
-						e.printStackTrace();
-						return;
-					}
-					agentsInAirport.putAll(agentsMsg.getAgents());
-					agentsInAirport.remove(id); // remove self
-					state++;
-				} else {
-					block();
-				}
-				break;
-			case 4:
-				// Connect to other airplanes
-				if (!chooseNewValue()) {
-					Logger.printErrMsg(getAID(), "Possible error");
-				}
-				if (agentsInAirport.size() == 0) {
-					isABTRunning = false;
-				}
-				M_Connect connectObject = null;
-				try {
-					connectObject = new M_Connect(id, chosenTick, currentAirport.getAID());
-				} catch (NullPointerException e) {
-					Logger.printErrMsg(getAID(), id + " " + chosenTick + " " + currentAirport.getAID().getLocalName());
-				}
-				
-				ACLMessage connectACL = new ACLMessage(M_Connect.performative);
-				connectACL.setProtocol(M_Connect.protocol);
-				try {
-					connectACL.setContentObject(connectObject);
-				} catch (IOException e) {
-					e.printStackTrace();
-					return;
-				}
-				agentsInAirport.forEach( (k,aid) -> {					
-					connectACL.addReceiver(aid);
-				});
-				send(connectACL);
-				done = true;
-				state++;
-				break;
-			default:
-				return;
-			}		
-			
-		}
-
-		@Override
-		public boolean done() {
-			return done;
+				//connectToOtherAirplanes();
+			}
 		}
 		
+		public void pickNewAirport() {
+			setAirport(chooseNewDestiny());
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Picked new airport: " + currentAirport.getAID().getLocalName());
+			resetState();
+			setNewDomains();
+		}
+		
+		public void requestAirplanesInAirport() {
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Starting Connect Protocol to " + currentAirport.getAID().getLocalName());
+			M_RequestAgents requestAgentsMsg = new M_RequestAgents(id);
+			String replyWith = requestAgentsMsg.getReplyWith();
+			ACLMessage requestAgentsACL = new ACLMessage(M_RequestAgents.performative);
+			requestAgentsACL.setProtocol(M_RequestAgents.protocol);
+			try {
+				requestAgentsACL.setContentObject(requestAgentsMsg);
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				return;
+			}
+			requestAgentsACL.setReplyWith(replyWith);
+			requestAgentsACL.addReceiver(currentAirport.getAID());
+			send(requestAgentsACL);
+		}
 	}
 	
 	public class NotInAirportListeningBehaviour extends CyclicBehaviour {
@@ -905,7 +819,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
 			if (aclMsg != null) {
-				Logger.printMsg(getAID(), "Received not in airport");
+				Logger.printMsg(getAID(), currentAirport.getAID(), "Received not in airport");
 				M_NotInAirport notInAirportMsg;
 				try {
 					notInAirportMsg = (M_NotInAirport) aclMsg.getContentObject();
@@ -932,14 +846,14 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
 				try {
-					isABTRunning = true;
 					M_Connect connectMsg = (M_Connect) msg.getContentObject();
 					AID airportInMsg = connectMsg.getAirport();
-					Logger.printMsg(getAID(), "Received connect from " + connectMsg.getAgentId() + " with value " + connectMsg.getValue());
+					Logger.printMsg(getAID(), currentAirport.getAID(), "Received connect from " + connectMsg.getAgentId() + " for airport " + airportInMsg.getLocalName());
 					if (!isConnectedToAirport || !currentAirport.getAID().equals(airportInMsg)) {
 						sendNotInAirportMsg(msg.getSender());
 						return;
 					}
+					isABTRunning = true;
 					agentsInAirport.put(connectMsg.getAgentId(), msg.getSender());
 					if (id > connectMsg.getAgentId()) {
 						agentView.put(connectMsg.getAgentId(), new AgentViewValue(connectMsg.getValue(), msg.getSender()));
@@ -949,13 +863,12 @@ class ListenResetBehaviour extends CyclicBehaviour {
 						if (chosenTick != null) {
 							sendOkMessage();
 						} else {
-							tryToGetNewValue();
+							tryToChooseNewTick();
 						}
 						
 					} else {
-						//Logger.printMsg(getAID(), "less priority");
 						if (chosenTick == null || chosenTick.intValue() == connectMsg.getValue()) {
-							tryToGetNewValue();
+							tryToChooseNewTick();
 						}
 						checkABTSuccess();
 					}
@@ -978,7 +891,7 @@ class ListenResetBehaviour extends CyclicBehaviour {
 			}
 			notInAirportACL.addReceiver(receiver);
 			send(notInAirportACL);
-			Logger.printMsg(getAID(), "Sent not in airport");
+			Logger.printMsg(getAID(), currentAirport.getAID(), "Sent not in airport. IsConnectedToAirport=" + isConnectedToAirport);
 		}
 	}
 

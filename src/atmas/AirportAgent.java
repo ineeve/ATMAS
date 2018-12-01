@@ -1,34 +1,23 @@
 package atmas;
 
 import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.TreeMap;
 
-import FIPA.FipaMessage;
 import jade.core.AID;
-import sajas.core.Agent;
-import sajas.core.behaviours.Behaviour;
-import sajas.core.behaviours.CyclicBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
-import messages.M_ResetDone;
 import messages.M_Agents;
-import messages.M_Connect;
 import messages.M_Disconnect;
-import messages.M_Ok;
-import messages.M_DisconnectDone;
 import messages.M_RequestAgents;
 import messages.M_Reset;
+import messages.M_ResetDone;
 import messages.M_Start;
-import repast.simphony.space.SpatialMath;
 import repast.simphony.space.continuous.ContinuousSpace;
-import repast.simphony.space.continuous.NdPoint;
 import repast.simphony.space.grid.Grid;
-import repast.simphony.space.grid.GridPoint;
+import sajas.core.Agent;
+import sajas.core.behaviours.Behaviour;
+import sajas.core.behaviours.CyclicBehaviour;
 import utils.Logger;
 
 public class AirportAgent extends Agent {
@@ -86,8 +75,8 @@ public class AirportAgent extends Agent {
 					e.printStackTrace();
 					return;
 				}
-				send(reply);
 				connectedAirplanes.put(requestMsg.getAgentId(), aclMessage.getSender());
+				send(reply);
 				Logger.printMsg(getAID(), "Sent reply to request for agents");
 				
 			} else {
@@ -113,35 +102,6 @@ public class AirportAgent extends Agent {
 					return;
 				}
 				connectedAirplanes.remove(disconnectMsg.getAgentId());
-				ACLMessage reply = aclMessage.createReply();
-				reply.setPerformative(M_DisconnectDone.performative);
-				reply.setProtocol(M_DisconnectDone.protocol);
-				M_DisconnectDone okContent = new M_DisconnectDone();
-				try {
-					reply.setContentObject(okContent);
-				} catch (IOException e) {
-					e.printStackTrace();
-					return;
-				}
-				reply.addReceiver(aclMessage.getSender());
-				send(reply);
-				Logger.printMsg(getAID(), "Disconnected " + aclMessage.getSender().getLocalName());
-				if (connectedAirplanes.size() > 0) {
-					// Initiate reset protocol
-					Logger.printMsg(getAID(), "Initiating reset protocol");
-					M_Reset resetMsg = new M_Reset(disconnectMsg.getAgentId());
-					ACLMessage aclReset = new ACLMessage(M_Reset.performative);
-					aclReset.setProtocol(M_Reset.protocol);
-					try {
-						aclReset.setContentObject(resetMsg);
-					} catch (IOException e) {
-						e.printStackTrace();
-						return;
-					}
-					aclReset.addReceiver(connectedAirplanes.firstEntry().getValue()); // send reset to top priority agent
-					send(aclReset);
-				}
-				
 			} else {
 				block();
 			}

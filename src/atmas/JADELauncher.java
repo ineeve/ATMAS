@@ -34,7 +34,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	static final public int TICKS_PER_HOUR = 12;
 	
 	private int numAirports = 5;
-	private int numAirplanes = 3;
+	private int numAirplanes = 50;
 	private int gridSize = 50;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	
