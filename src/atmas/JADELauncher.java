@@ -38,6 +38,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	
 	private int numAirports;
 	private int numAirplanes;
+	private double proximity;
 	private int gridSize = 50;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	
@@ -114,6 +115,21 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			space.moveTo(airplane, pt.getX(), pt.getY());
 			grid.moveTo(airplane, pt.getX(), pt.getY());
 		}
+		proximity = calculateAirportsProximity();
+	}
+	
+	public double calculateAirportsProximity() {
+		double totalDistance = 0;
+		int numComb = 0;
+		for (int i = 0; i < airports.size(); i++) {
+			for (int j = i+1; j < airports.size(); i++) {
+				GridPoint g1 = airports.get(i).getGridPoint();
+				GridPoint g2 = airports.get(j).getGridPoint();
+				totalDistance += grid.getDistance(g1, g2);
+				numComb++;
+			}
+		}
+		return totalDistance / (double) numComb;
 	}
 	
 	public static void writeDataAtOnce(String filePath) 
@@ -132,7 +148,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	  
 	        // create a List which contains String array 
 	        List<String[]> data = new ArrayList<String[]>(); 
-	        data.add(new String[] { "Airports", "Airplanes", "Ticks", "AvgAirportDistance" }); 
+	        data.add(new String[] { "Airports", "Airplanes", "Ticks", "Proximity" }); 
 	        data.add(new String[] { "Airplanes", "10", "620" }); 
 	        writer.writeAll(data); 
 	  
