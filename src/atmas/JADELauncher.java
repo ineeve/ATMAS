@@ -1,23 +1,23 @@
 package atmas;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
-import jade.core.AID;
-import sajas.core.Agent;
+import au.com.bytecode.opencsv.CSVWriter;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
-import sajas.core.Runtime;
-import sajas.wrapper.AgentController;
-import sajas.wrapper.ContainerController;
-import utils.AirportWrapper;
 import jade.wrapper.StaleProxyException;
 import repast.simphony.context.Context;
 import repast.simphony.context.space.continuous.ContinuousSpaceFactory;
 import repast.simphony.context.space.continuous.ContinuousSpaceFactoryFinder;
-import repast.simphony.context.space.graph.NetworkBuilder;
 import repast.simphony.context.space.grid.GridFactory;
 import repast.simphony.context.space.grid.GridFactoryFinder;
 import repast.simphony.dataLoader.ContextBuilder;
+import repast.simphony.engine.environment.RunEnvironment;
+import repast.simphony.parameter.Parameters;
 import repast.simphony.space.continuous.ContinuousSpace;
 import repast.simphony.space.continuous.NdPoint;
 import repast.simphony.space.continuous.RandomCartesianAdder;
@@ -26,15 +26,18 @@ import repast.simphony.space.grid.GridBuilderParameters;
 import repast.simphony.space.grid.GridPoint;
 import repast.simphony.space.grid.SimpleGridAdder;
 import repast.simphony.space.grid.WrapAroundBorders;
+import sajas.core.Runtime;
 import sajas.sim.repasts.RepastSLauncher;
+import sajas.wrapper.ContainerController;
+import utils.AirportWrapper;
 
 public class JADELauncher extends RepastSLauncher implements ContextBuilder<Object> {
 	
 	// 1 tick = 5 minutes.
 	static final public int TICKS_PER_HOUR = 12;
 	
-	private int numAirports = 5;
-	private int numAirplanes = 50;
+	private int numAirports;
+	private int numAirplanes;
 	private int gridSize = 50;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	
@@ -76,6 +79,13 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	
 	private void setup(ContainerController mainContainer) {
 		airports.clear();
+		Parameters params = RunEnvironment.getInstance().getParameters();
+		numAirplanes = (Integer) params.getValue("airplane_count");
+		numAirports = (Integer) params.getValue("airport_count");
+		
+		RunEnvironment.getInstance().setScheduleTickDelay(10);
+		RunEnvironment.getInstance().endAt(1000);
+		
 		// startup airport agents
 		for(int i = 0; i < numAirports; i++) {
 			AirportAgent ag = new AirportAgent(space, grid);
@@ -103,10 +113,35 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			GridPoint pt = airportSelected.getGridPoint();
 			space.moveTo(airplane, pt.getX(), pt.getY());
 			grid.moveTo(airplane, pt.getX(), pt.getY());
-			// TODO: Move to origin airports once travel is implemented.
-//			space.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));
-//			grid.moveTo(airplane, (int) Math.round(Math.random()*grid_size), (int) Math.round(Math.random()*grid_size));
 		}
 	}
+	
+	public static void writeDataAtOnce(String filePath) 
+	{ 
+	  
+	    // first create file object for file placed at location 
+	    // specified by filepath 
+	    File file = new File(filePath); 
+	  
+	    try { 
+	        // create FileWriter object with file as parameter 
+	        FileWriter outputfile = new FileWriter(file); 
+	  
+	        // create CSVWriter object filewriter object as parameter 
+	        CSVWriter writer = new CSVWriter(outputfile); 
+	  
+	        // create a List which contains String array 
+	        List<String[]> data = new ArrayList<String[]>(); 
+	        data.add(new String[] { "Airports", "Airplanes", "Ticks", "AvgAirportDistance" }); 
+	        data.add(new String[] { "Airplanes", "10", "620" }); 
+	        writer.writeAll(data); 
+	  
+	        // closing writer connection 
+	        writer.close(); 
+	    } 
+	    catch (IOException e) { 
+	        e.printStackTrace(); 
+	    } 
+	} 
 
 }

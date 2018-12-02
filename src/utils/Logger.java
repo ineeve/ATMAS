@@ -13,10 +13,10 @@ public class Logger {
 	}
 	
 	public static void printErrMsg(AID agentAID, AID airport, String msg) {
-		System.err.println(agentAID.getLocalName() + " at " + airport.getLocalName() +  ": " + msg);
+		//System.err.println(agentAID.getLocalName() + " at " + airport.getLocalName() +  ": " + msg);
 	}
 	
 	public static void printErrMsg(AID agentAID, String msg) {
-		System.err.println(agentAID.getLocalName() +  ": " + msg);
+		//System.err.println(agentAID.getLocalName() +  ": " + msg);
 	}
 }
