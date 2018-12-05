@@ -122,7 +122,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 		double totalDistance = 0;
 		int numComb = 0;
 		for (int i = 0; i < airports.size(); i++) {
-			for (int j = i+1; j < airports.size(); i++) {
+			for (int j = i+1; j < airports.size(); j++) {
 				GridPoint g1 = airports.get(i).getGridPoint();
 				GridPoint g2 = airports.get(j).getGridPoint();
 				totalDistance += grid.getDistance(g1, g2);
@@ -132,32 +132,4 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 		return totalDistance / (double) numComb;
 	}
 	
-	public static void writeDataAtOnce(String filePath) 
-	{ 
-	  
-	    // first create file object for file placed at location 
-	    // specified by filepath 
-	    File file = new File(filePath); 
-	  
-	    try { 
-	        // create FileWriter object with file as parameter 
-	        FileWriter outputfile = new FileWriter(file); 
-	  
-	        // create CSVWriter object filewriter object as parameter 
-	        CSVWriter writer = new CSVWriter(outputfile); 
-	  
-	        // create a List which contains String array 
-	        List<String[]> data = new ArrayList<String[]>(); 
-	        data.add(new String[] { "Airports", "Airplanes", "Ticks", "Proximity" }); 
-	        data.add(new String[] { "Airplanes", "10", "620" }); 
-	        writer.writeAll(data); 
-	  
-	        // closing writer connection 
-	        writer.close(); 
-	    } 
-	    catch (IOException e) { 
-	        e.printStackTrace(); 
-	    } 
-	} 
-
 }
