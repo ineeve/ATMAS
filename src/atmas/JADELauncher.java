@@ -1,12 +1,7 @@
 package atmas;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 
-import au.com.bytecode.opencsv.CSVWriter;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
 import jade.wrapper.StaleProxyException;
@@ -41,6 +36,8 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	private double proximity;
 	private int gridSize = 50;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
+	private ArrayList<AirplaneAgent> airplanesList = new ArrayList<AirplaneAgent>();
+	private ArrayList<AirportAgent> airportsList = new ArrayList<AirportAgent>();
 	
 	private Context<Object> context;
 	private ContinuousSpace<Object> space;
@@ -69,6 +66,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 
 		return super.build(context);
 	}
+	
 	
 	@Override
 	protected void launchJADE() {
@@ -99,6 +97,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			NdPoint pt = space.getLocation(ag);
 			grid.moveTo(ag, (int) pt.getX(), (int) pt.getY());
 			airports.add(new AirportWrapper(ag.getAID(), grid.getLocation(ag)));
+			airportsList.add(ag);
 		}
 		// startup plane agents
 		for (int i = 0; i < numAirplanes; i++) {
@@ -110,12 +109,30 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			} catch(StaleProxyException e) {
 				e.printStackTrace();
 			}
+			airplanesList.add(airplane);
 			context.add(airplane);
 			GridPoint pt = airportSelected.getGridPoint();
 			space.moveTo(airplane, pt.getX(), pt.getY());
 			grid.moveTo(airplane, pt.getX(), pt.getY());
 		}
 		proximity = calculateAirportsProximity();
+		System.out.println(proximity);
+	}
+	
+	public double getProximity() {
+		System.out.println("proximity");
+		return proximity;
+	}
+	public int getMessagesExchanged() {
+		System.out.println("messages");
+		int sum = 0;
+		for (int i = 0; i < airplanesList.size(); i++) {
+			sum += airplanesList.get(i).getMessageCounter();
+		}
+		for (int i = 0; i < airportsList.size(); i++) {
+			sum += airportsList.get(i).getMessageCounter();
+		}
+		return sum;
 	}
 	
 	public double calculateAirportsProximity() {

@@ -50,6 +50,7 @@ public class AirplaneAgent extends Agent {
 	private boolean isReseting;
 	private boolean isABTRunning = false;
 	private double startTick;
+	private int messageCounter;
 	
 	// Grid units / tick.
 	private final double minSpeed = 1.0 / JADELauncher.TICKS_PER_HOUR;
@@ -86,6 +87,7 @@ public class AirplaneAgent extends Agent {
 		agentsInAirport = new TreeMap<Integer,AID>();
 		this.isReseting = false;
 		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
+		this.messageCounter = 0;
 	}
 	
 	public boolean getIsABTRunning() {
@@ -119,6 +121,9 @@ public class AirplaneAgent extends Agent {
 	
 	public String getCurrentDomain() {
 		return currentDomain.first() + " | " + currentDomain.last();
+	}
+	public int getMessageCounter() {
+		return messageCounter;
 	}
 	
 	public String getStatus() {
@@ -170,6 +175,7 @@ public class AirplaneAgent extends Agent {
 			
 			ACLMessage disconnectACLMsg = receive(mtDisconnect);
 			if (disconnectACLMsg != null) {
+				messageCounter++;
 				M_Disconnect disconnectMsg;
 				 try {
 					disconnectMsg = (M_Disconnect) disconnectACLMsg.getContentObject();
@@ -485,9 +491,13 @@ public class AirplaneAgent extends Agent {
 		@Override
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
-			if (aclMsg != null && chosenTick != null) { // ABT hasn't ended if value is null, others will resume once this sends OK with value
-				Logger.printMsg(getAID(), currentAirport.getAID(), "Received ABT End");
-				isABTRunning = false;
+			if (aclMsg != null) {
+				messageCounter++;
+				if (chosenTick != null) {
+					// ABT hasn't ended if value is null, others will resume once this sends OK with value
+					Logger.printMsg(getAID(), currentAirport.getAID(), "Received ABT End");
+					isABTRunning = false;
+				}
 			} else {
 				block();
 			}
@@ -620,6 +630,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
+				messageCounter++;
 				if (!isReseting) {
 					Logger.printMsg(getAID(), currentAirport.getAID(), "Received Nogood");
 					try {
@@ -643,8 +654,10 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
+				messageCounter++;
 				if (!isReseting) {
 					try {
+						messageCounter++;
 						M_Ok okMessage = (M_Ok) msg.getContentObject();
 						parseOkMessage(okMessage, msg.getSender());
 					} catch (UnreadableException e) {
@@ -668,6 +681,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if (msg != null) {
+				messageCounter++;
 				takeDown();
 			} else {
 				block();
@@ -729,6 +743,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage agentsACLMsg = receive(mtAgents);
 			if (agentsACLMsg != null) {
+				messageCounter++;
 				M_Agents agentsMsg;
 				try {
 					agentsMsg = (M_Agents) agentsACLMsg.getContentObject();
@@ -819,6 +834,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage aclMsg = receive(mt);
 			if (aclMsg != null) {
+				messageCounter++;
 				Logger.printMsg(getAID(), currentAirport.getAID(), "Received not in airport");
 				M_NotInAirport notInAirportMsg;
 				try {
@@ -845,6 +861,7 @@ public class AirplaneAgent extends Agent {
 		public void action() {
 			ACLMessage msg = receive(mt);
 			if(msg != null) {
+				messageCounter++;
 				try {
 					M_Connect connectMsg = (M_Connect) msg.getContentObject();
 					AID airportInMsg = connectMsg.getAirport();

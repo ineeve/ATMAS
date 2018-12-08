@@ -24,6 +24,7 @@ public class AirportAgent extends Agent {
 	
 	private ContinuousSpace<Object> space;
 	private Grid<Object> grid;
+	private int messageCounter;
 	
 	// for each agentId, saves it's AID
 	private TreeMap<Integer, AID> connectedAirplanes;
@@ -32,6 +33,7 @@ public class AirportAgent extends Agent {
 		this.space = space;
 		this.grid = grid;
 		connectedAirplanes = new TreeMap<Integer,AID>();
+		messageCounter = 0;
 	}
 	
 	@Override
@@ -49,6 +51,10 @@ public class AirportAgent extends Agent {
 		sendStartMessage();
 	}
 	
+	public int getMessageCounter() {
+		return messageCounter;
+	}
+	
 	public class RequestAgentsListeningBehaviour extends CyclicBehaviour{
 
 		MessageTemplate mt = MessageTemplate.and(
@@ -58,6 +64,7 @@ public class AirportAgent extends Agent {
 		public void action() {
 			ACLMessage aclMessage = receive(mt);
 			if (aclMessage != null) {
+				messageCounter++;
 				//Logger.printMsg(getAID(), "Received request for agents");
 				M_RequestAgents requestMsg;
 				try {
@@ -93,6 +100,7 @@ public class AirportAgent extends Agent {
 		public void action() {
 			ACLMessage aclMessage = receive(mt);
 			if (aclMessage != null) {
+				messageCounter++;
 				// Logger.printMsg(getAID(), "Received airplane disconnect");
 				M_Disconnect disconnectMsg;
 				try {
@@ -135,6 +143,7 @@ public class AirportAgent extends Agent {
 			// wait for ResetDone
 			ACLMessage aclReceived = receive(mt);
 			if (aclReceived != null) {
+				messageCounter++;
 				processResetDone();
 				done = true;
 			} else {

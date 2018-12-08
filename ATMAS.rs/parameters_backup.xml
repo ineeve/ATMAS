@@ -13,7 +13,7 @@
 									
 		/>
 				<parameter name="airport_count" displayName="airport_count" type="int" 
-						defaultValue="1" 
+						defaultValue="2" 
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
 									

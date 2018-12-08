@@ -1,7 +1,6 @@
 <repast.simphony.data2.engine.DataSetDescriptor simphonyVersion="2.5.0">
-  <name>A Data Set</name>
-  <type>NON_AGGREGATE</type>
-  <sourceType>atmas.JADELauncher</sourceType>
+  <name>aggr_dataset</name>
+  <type>AGGREGATE</type>
   <inclTick>true</inclTick>
   <inclBatchRun>true</inclBatchRun>
   <inclRandomSeed>false</inclRandomSeed>
@@ -12,16 +11,26 @@
     <pType>LAST</pType>
     <duration>-1.0</duration>
     <frequency>ONE_TIME</frequency>
-    <hashCode>107480538</hashCode>
+    <hashCode>-2048301103</hashCode>
   </scheduleParams>
   <atEnd>false</atEnd>
   <methodDataSources class="linked-hash-map">
     <entry>
-      <string>airportsProximity</string>
+      <string>Airplane Messages</string>
       <repast.simphony.data2.engine.MethodDataSourceDefinition>
-        <id>airportsProximity</id>
-        <className>atmas.JADELauncher</className>
-        <methodName>calculateAirportsProximity</methodName>
+        <id>Airplane Messages</id>
+        <className>atmas.AirplaneAgent</className>
+        <methodName>getMessageCounter</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Airport Messages</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Airport Messages</id>
+        <className>atmas.AirportAgent</className>
+        <methodName>getMessageCounter</methodName>
+        <aggType>SUM</aggType>
       </repast.simphony.data2.engine.MethodDataSourceDefinition>
     </entry>
   </methodDataSources>

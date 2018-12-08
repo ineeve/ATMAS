@@ -1,13 +1,14 @@
 <repast.simphony.data2.engine.FileSinkDescriptor simphonyVersion="2.5.0">
-  <name>A File Sink</name>
-  <dataSet>A Data Set</dataSet>
+  <name>aggr_file_sink</name>
+  <dataSet>aggr_dataset</dataSet>
   <delimiter>,</delimiter>
   <format>TABULAR</format>
   <sourceIds class="linked-hash-set">
-    <string>airportsProximity</string>
+    <string>Airplane Messages</string>
     <string>tick</string>
     <string>run</string>
+    <string>Airport Messages</string>
   </sourceIds>
-  <fileName>ModelOutput.txt</fileName>
+  <fileName>ModelOutput.csv</fileName>
   <addTimeStamp>true</addTimeStamp>
 </repast.simphony.data2.engine.FileSinkDescriptor>
