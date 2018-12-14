@@ -33,8 +33,59 @@
         <aggType>SUM</aggType>
       </repast.simphony.data2.engine.MethodDataSourceDefinition>
     </entry>
+    <entry>
+      <string>Airport X Std.Dev.</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Airport X Std.Dev.</id>
+        <className>atmas.AirportAgent</className>
+        <methodName>getX</methodName>
+        <aggType>STD_DEV</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Airport Y Std.Dev.</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Airport Y Std.Dev.</id>
+        <className>atmas.AirportAgent</className>
+        <methodName>getY</methodName>
+        <aggType>STD_DEV</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Airplanes Flights</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Airplanes Flights</id>
+        <className>atmas.AirplaneAgent</className>
+        <methodName>getFlightsCounter</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>AirplaneMaxSpeed</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>AirplaneMaxSpeed</id>
+        <className>atmas.AirplaneAgent</className>
+        <methodName>getMaxSpeed</methodName>
+        <aggType>MEAN</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
   </methodDataSources>
-  <countSources class="linked-hash-map"/>
+  <countSources class="linked-hash-map">
+    <entry>
+      <string>Number of Airplanes</string>
+      <repast.simphony.data2.engine.CountSourceDefinition>
+        <typeName>atmas.AirplaneAgent</typeName>
+        <id>Number of Airplanes</id>
+      </repast.simphony.data2.engine.CountSourceDefinition>
+    </entry>
+    <entry>
+      <string>Number of Airports</string>
+      <repast.simphony.data2.engine.CountSourceDefinition>
+        <typeName>atmas.AirportAgent</typeName>
+        <id>Number of Airports</id>
+      </repast.simphony.data2.engine.CountSourceDefinition>
+    </entry>
+  </countSources>
   <customNADataSources class="linked-hash-map"/>
   <customAggDataSources class="linked-hash-map"/>
 </repast.simphony.data2.engine.DataSetDescriptor>

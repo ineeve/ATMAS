@@ -54,6 +54,12 @@ public class AirportAgent extends Agent {
 	public int getMessageCounter() {
 		return messageCounter;
 	}
+	public int getX() {
+		return grid.getLocation(this).getX();
+	}
+	public int getY() {
+		return grid.getLocation(this).getY();
+	}
 	
 	public class RequestAgentsListeningBehaviour extends CyclicBehaviour{
 

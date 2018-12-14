@@ -33,7 +33,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	
 	private int numAirports;
 	private int numAirplanes;
-	private double proximity;
+	private double airplanesMaxSpeed;
 	private int gridSize = 50;
 	private ArrayList<AirportWrapper> airports = new ArrayList<AirportWrapper>();
 	private ArrayList<AirplaneAgent> airplanesList = new ArrayList<AirplaneAgent>();
@@ -77,13 +77,16 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 	}
 	
 	private void setup(ContainerController mainContainer) {
+		airplanesList.clear();
+		airportsList.clear();
 		airports.clear();
+		context.clear();
 		Parameters params = RunEnvironment.getInstance().getParameters();
 		numAirplanes = (Integer) params.getValue("airplane_count");
 		numAirports = (Integer) params.getValue("airport_count");
+		airplanesMaxSpeed = params.getDouble("airplanes_max_speed");
 		
-		RunEnvironment.getInstance().setScheduleTickDelay(10);
-		RunEnvironment.getInstance().endAt(1000);
+		RunEnvironment.getInstance().endAt(10000);
 		
 		// startup airport agents
 		for(int i = 0; i < numAirports; i++) {
@@ -103,7 +106,7 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 		for (int i = 0; i < numAirplanes; i++) {
 			int airportIndex = (int)(Math.random()*numAirports);
 			AirportWrapper airportSelected = airports.get(airportIndex);
-			AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected, null);
+			AirplaneAgent airplane = new AirplaneAgent(space, grid, i, airports, airportSelected, null, airplanesMaxSpeed);
 			try {
 				mainContainer.acceptNewAgent("airplane"+i, airplane).start();
 			} catch(StaleProxyException e) {
@@ -115,14 +118,9 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			space.moveTo(airplane, pt.getX(), pt.getY());
 			grid.moveTo(airplane, pt.getX(), pt.getY());
 		}
-		proximity = calculateAirportsProximity();
-		System.out.println(proximity);
+		System.out.println("Running with " + airplanesList.size() +  " airplanes and " + airportsList.size() + " airports");
 	}
 	
-	public double getProximity() {
-		System.out.println("proximity");
-		return proximity;
-	}
 	public int getMessagesExchanged() {
 		System.out.println("messages");
 		int sum = 0;
@@ -133,20 +131,6 @@ public class JADELauncher extends RepastSLauncher implements ContextBuilder<Obje
 			sum += airportsList.get(i).getMessageCounter();
 		}
 		return sum;
-	}
-	
-	public double calculateAirportsProximity() {
-		double totalDistance = 0;
-		int numComb = 0;
-		for (int i = 0; i < airports.size(); i++) {
-			for (int j = i+1; j < airports.size(); j++) {
-				GridPoint g1 = airports.get(i).getGridPoint();
-				GridPoint g2 = airports.get(j).getGridPoint();
-				totalDistance += grid.getDistance(g1, g2);
-				numComb++;
-			}
-		}
-		return totalDistance / (double) numComb;
 	}
 	
 }

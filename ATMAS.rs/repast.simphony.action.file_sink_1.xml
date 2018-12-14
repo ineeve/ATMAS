@@ -5,9 +5,13 @@
   <format>TABULAR</format>
   <sourceIds class="linked-hash-set">
     <string>Airplane Messages</string>
-    <string>tick</string>
-    <string>run</string>
     <string>Airport Messages</string>
+    <string>Airport Y Std.Dev.</string>
+    <string>Airport X Std.Dev.</string>
+    <string>Airplanes Flights</string>
+    <string>Number of Airplanes</string>
+    <string>Number of Airports</string>
+    <string>AirplaneMaxSpeed</string>
   </sourceIds>
   <fileName>ModelOutput.csv</fileName>
   <addTimeStamp>true</addTimeStamp>

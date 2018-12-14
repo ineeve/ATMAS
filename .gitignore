@@ -4,3 +4,4 @@ settings
 *.log
 *.log.1
 output
+*.csv

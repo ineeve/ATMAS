@@ -51,13 +51,14 @@ public class AirplaneAgent extends Agent {
 	private boolean isABTRunning = false;
 	private double startTick;
 	private int messageCounter;
+	private int flightsCounter;
 	
 	// Grid units / tick.
-	private final double minSpeed = 1.0 / JADELauncher.TICKS_PER_HOUR;
-	private final double maxSpeed = 3.0 / JADELauncher.TICKS_PER_HOUR;
-	private double realSpeed = maxSpeed;
+	private final double minSpeed = 0.1 / JADELauncher.TICKS_PER_HOUR;
+	private double maxSpeed;
+	private double realSpeed;
 	
-	public static final int maxFuel = 14 * JADELauncher.TICKS_PER_HOUR;
+	public static final int maxFuel = 140 * JADELauncher.TICKS_PER_HOUR;
 	
 	private AirplaneStatus status;
 	private boolean parkedIdle = true;
@@ -73,12 +74,15 @@ public class AirplaneAgent extends Agent {
 	 * @param origin
 	 * @param emergencyChance Null for default emergency value.
 	 */
-	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportWrapper> airports, AirportWrapper origin, Double emergencyChance) {
+	public AirplaneAgent(ContinuousSpace<Object> space, Grid<Object> grid, int id, ArrayList<AirportWrapper> airports, AirportWrapper origin, Double emergencyChance, Double maxSpeed) {
+		this.maxSpeed = (double)(maxSpeed / JADELauncher.TICKS_PER_HOUR);
+		this.realSpeed = maxSpeed;
 		this.space = space;
 		this.grid = grid;
 		this.originalId = id;
 		this.id = id;
 		this.airports = airports;
+		this.flightsCounter = 0;
 		setAirport(origin);
 		status = AirplaneStatus.PARKED;
 		originalDomain = new TreeSet<Integer>();
@@ -86,7 +90,7 @@ public class AirplaneAgent extends Agent {
 		agentView = new TreeMap<Integer, AgentViewValue>();
 		agentsInAirport = new TreeMap<Integer,AID>();
 		this.isReseting = false;
-		this.emergencyChance = (emergencyChance != null ? emergencyChance : Math.pow(10, -6));
+		this.emergencyChance = 0; //(emergencyChance != null ? emergencyChance : Math.pow(10, -6));
 		this.messageCounter = 0;
 	}
 	
@@ -117,6 +121,10 @@ public class AirplaneAgent extends Agent {
 	
 	public String getOriginalDomain() {
 		return originalDomain.first() + " | " + originalDomain.last();
+	}
+	
+	public int getFlightsCounter() {
+		return flightsCounter;
 	}
 	
 	public String getCurrentDomain() {
@@ -284,6 +292,7 @@ public class AirplaneAgent extends Agent {
 				status = AirplaneStatus.PARKED;
 				parkedIdle = true;
 				id = originalId;
+				this.flightsCounter++;
 			} else {
 				NdPoint myPoint = space.getLocation(this);
 				GridPoint pt = currentAirport.getGridPoint();
